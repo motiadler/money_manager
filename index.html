@@ -1531,7 +1531,7 @@ const GD = {
     return new Promise((res,rej)=>{
       if (!(window.google && google.accounts && google.accounts.oauth2)) return rej(new Error('nolib'));
       const tc=google.accounts.oauth2.initTokenClient({client_id:this.clientId(), scope:'https://www.googleapis.com/auth/drive',
-        callback:r=>{ if(r.error) return rej(new Error(r.error)); this.token=r.access_token; this.exp=Date.now()+((+r.expires_in||3600)-60)*1000; res(); },
+        callback:r=>{ if(r.error) return rej(new Error(r.error)); if (google.accounts.oauth2.hasGrantedAllScopes && !google.accounts.oauth2.hasGrantedAllScopes(r,'https://www.googleapis.com/auth/drive')) return rej(new Error('scope')); this.token=r.access_token; this.exp=Date.now()+((+r.expires_in||3600)-60)*1000; res(); },
         error_callback:e=>rej(new Error(e && e.type || 'popup'))});
       tc.requestAccessToken({prompt:''});
     });
@@ -1541,7 +1541,11 @@ const GD = {
     const url = path.startsWith('http') ? path : 'https://www.googleapis.com/drive/v3/'+path;
     const r = await fetch(url,{...opts, headers:{...(opts.headers||{}), Authorization:'Bearer '+this.token}});
     if (r.status===401){ this.expired(); throw new Error('expired'); }
-    if (!r.ok) throw new Error('http'+r.status);
+    if (!r.ok){
+      let reason='', msg='';
+      try{ const j=await r.json(); reason=(j.error && (j.error.errors&&j.error.errors[0]&&j.error.errors[0].reason || j.error.status)) || ''; msg=(j.error&&j.error.message)||''; }catch(e){}
+      const err=new Error('http'+r.status); err.status=r.status; err.reason=reason; err.detail=msg; throw err;
+    }
     return raw ? r : (r.status===204 ? null : r.json());
   },
   expired(){ if(!this.token) return; this.token=null; updateStatus(); toast('החיבור ל-Google פג. השינויים יישמרו בדרייב אחרי התחברות מחדש.',[{label:'התחברות מחדש',fn:driveReauth}]); },
@@ -1584,10 +1588,13 @@ const GD = {
     if (!this.canEdit){ if(!this.warned){ this.warned=true; toast('יש לך הרשאת צפייה בלבד בתיקייה בדרייב, ולכן שינויים לא יישמרו שם.'); } return; }
     if (!this.timers[path]) this.busy++;
     clearTimeout(this.timers[path]);
-    this.timers[path]=setTimeout(()=>{ delete this.timers[path]; const prev=this.chains[path]||Promise.resolve(); this.chains[path]=prev.then(()=>this.writeNow(path,getObj())).finally(()=>{ this.busy=Math.max(0,this.busy-1); }); },400);
+    this.getters=this.getters||{}; this.getters[path]=getObj;
+    // one write at a time for all files, to stay well within Google's rate limits
+    this.timers[path]=setTimeout(()=>{ delete this.timers[path]; this.chain=(this.chain||Promise.resolve()).then(()=>this.writeNow(path,getObj())).finally(()=>{ this.busy=Math.max(0,this.busy-1); }); },400);
   },
-  async writeNow(path, obj){
-    if (!this.token) return;
+  async writeNow(path, obj, attempt=0){
+    this.failed=this.failed||new Set();
+    if (!this.token){ this.failed.add(path); return; }
     try{
       const body=JSON.stringify(obj,null,1), id=this.ids[path]; let r;
       if (id) r=await this.api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&supportsAllDrives=true&fields=id,modifiedTime`,{method:'PATCH',headers:{'Content-Type':'application/json'},body});
@@ -1597,9 +1604,27 @@ const GD = {
         r=await this.api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,modifiedTime',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+bd},body:mp});
         this.ids[path]=r.id;
       }
-      this.mod[path]=r.modifiedTime;
-    }catch(e){ if(e.message!=='expired') toast('השמירה ל-Google Drive נכשלה. נסו שוב בעוד רגע.'); }
+      this.mod[path]=r.modifiedTime; this.failed.delete(path);
+    }catch(e){
+      if (e.message==='expired'){ this.failed.add(path); return; }
+      const rate = e.status===429 || e.status>=500 || /rateLimit|userRateLimit|backendError/i.test(e.reason||'');
+      if (e.status===404 && this.ids[path] && attempt<1){ delete this.ids[path]; return this.writeNow(path,obj,attempt+1); }
+      if (rate && attempt<4){ await new Promise(r=>setTimeout(r,(2**attempt)*1000+Math.random()*500)); return this.writeNow(path,obj,attempt+1); }
+      this.failed.add(path);
+      this.reportFail(e);
+    }
   },
+  reportFail(e){
+    const now=Date.now(); if (this._lastFail && now-this._lastFail<4000) return; this._lastFail=now;
+    const r=e.reason||'', d=e.detail||'';
+    let msg;
+    if (/insufficientPermissions|SCOPE_INSUFFICIENT|insufficient/i.test(r+d)) msg='לא אושרה הרשאת עריכה לדרייב בזמן ההתחברות. התנתקו, התחברו שוב, ובחלון של Google סמנו את תיבת ההרשאה לדרייב.';
+    else if (/storageQuota/i.test(r)) msg='אין מספיק מקום פנוי ב-Google Drive.';
+    else if (/forbidden|cannotAddParent|teamDrive|appNotAuthorized/i.test(r) || e.status===403) msg=`Google חסמה את השמירה (${r||e.status}). ודאו שיש לחשבון הרשאת "עורך" לתיקייה.`;
+    else msg=`השמירה ל-Google Drive נכשלה (${e.status||''} ${r}${d?': '+d.slice(0,120):''}).`;
+    toast(msg,[{label:'לנסות שוב',fn:()=>this.retryFailed()}]);
+  },
+  retryFailed(){ const f=[...(this.failed||[])]; this.failed=new Set(); f.forEach(p=>{ const g=this.getters&&this.getters[p]; if(g) this.queue(p,g); }); if(!f.length) toast('אין שמירות שממתינות'); },
   saveSettings(){
     this.queue('categories.json',()=>({updated:new Date().toISOString(), categories:S.settings.categories, learned:S.settings.learned||{}}));
     this.queue('settings.json',()=>{ const {categories,learned,...rest}=S.settings; return rest; });
@@ -1619,6 +1644,7 @@ const GD = {
 function parseFolderId(s){ s=String(s||'').trim(); const m=s.match(/folders\/([\w-]{10,})/)||s.match(/[?&]id=([\w-]{10,})/); return m?m[1]:(/^[\w-]{10,}$/.test(s)?s:''); }
 function driveErr(e){
   const m=e && e.message || '';
+  if (m==='scope') return 'לא סומנה בחלון של Google ההרשאה לגשת לדרייב. התחברו שוב וסמנו את תיבת ההרשאה.';
   if (m==='nolib') return 'ספריית ההתחברות של Google לא נטענה. בדקו חיבור לאינטרנט ורעננו את העמוד.';
   if (m==='popup_closed' || m==='popup_failed_to_open') return 'חלון ההתחברות של Google נסגר או נחסם. אפשרו חלונות קופצים ונסו שוב.';
   if (m==='access_denied') return 'ההתחברות בוטלה, או שהחשבון לא נוסף כמשתמש בדיקה בהגדרות הפרויקט ב-Google Cloud.';
@@ -1640,7 +1666,7 @@ async function driveConnect(){
     if (GD.canEdit) scanDriveData(false);
   }catch(e){ document.getElementById('projBanner').innerHTML=''; toast(driveErr(e)); }
 }
-async function driveReauth(){ try{ await GD.signIn(); updateStatus(); if(GD.canEdit) GD.saveAll(); render(); toast('מחובר מחדש. הנתונים נשמרו בדרייב.'); }catch(e){ toast(driveErr(e)); } }
+async function driveReauth(){ try{ await GD.signIn(); updateStatus(); if(GD.canEdit){ GD.retryFailed(); GD.saveAll(); } render(); toast('מחובר מחדש. הנתונים נשמרו בדרייב.'); }catch(e){ toast(driveErr(e)); } }
 function driveDisconnect(){
   try{ if (GD.token && window.google) google.accounts.oauth2.revoke(GD.token,()=>{}); }catch(e){}
   GD.token=null; ACTIVE = PROJ.dir ? PROJ : null; try{ localStorage.removeItem('mm-gused'); }catch(e){}
