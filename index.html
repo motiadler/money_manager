@@ -562,11 +562,59 @@ function periodLenMonths(){ if(!S.range) return 1; const days=(new Date(S.range.
 const refMonth = () => S.range ? S.range.to.slice(0,7) : S.month;
 function goMonth(k){ S.month=k; S.range=null; }
 
+function learnedCat(desc, type){
+  const learned = S.settings.learned||{};
+  for (const k of [norm(desc), stripInst(desc)]) if (learned[k] && cats().some(c=>c.id===learned[k] && (!type || c.kind===type))) return learned[k];
+  return null;
+}
+function kwCat(desc, type){
+  const d=norm(desc); let best=null, bestLen=0;
+  for (const c of cats()){
+    if (type && c.kind!==type) continue;
+    for (const k of c.keywords){ const kk=norm(k); if (kk && d.includes(kk) && kk.length>bestLen){ best=c.id; bestLen=kk.length; } }
+  }
+  return best;
+}
+// card-company branch names ("ענף") -> our categories; first match wins
+const BRANCH_RULES=[
+  [/מזון מהיר|מסעד|בתי קפה|קפה|בר |פאב|קייטרינג|משלוח/, 'eatout'],
+  [/סופר|מרכול|מכולת|מזון|ירקות|מאפי|קצב|משקאות/, 'grocery'],
+  [/דלק|תחנות|תחנת/, 'fuel'],
+  [/חני/, 'parking'],
+  [/מוסך|רכב|צמיג/, 'car'],
+  [/תחבורה|מונית|רכבת|אוטובוס|הסעות/, 'transit'],
+  [/תקשורת|סלולר|טלפון|אינטרנט|טלוויזיה|כבלים/, 'phone'],
+  [/ביטוח/, 'insurance'],
+  [/פארם|קוסמטיק|טיפוח|יופי|מספר/, 'pharm'],
+  [/בריאות|רפוא|מרקחת|קופ.?ח|קופות|רופא|אופטיק/, 'health'],
+  [/ביגוד|אופנה|הנעלה|נעליים/, 'clothes'],
+  [/אלקטרוניק|מחשב|ריהוט|לבית|בית וגן|כלי בית|עיצוב|שיפוץ|בניין/, 'home'],
+  [/חשמל|גז|מים|אנרגיה/, 'utilities'],
+  [/עירי|ממשל|רשויות|ארנונה|מסים/, 'arnona'],
+  [/חינוך|לימוד|ספרים|גן |צעצוע|ילדים/, 'education'],
+  [/תיירות|טיס|תעופה|מלון|נופש|סוכנויות נסיעות/, 'vacation'],
+  [/פנאי|בידור|תרבות|קולנוע|ספורט|כושר|אומנות|מוזיק/, 'fun'],
+  [/תרומ|עמות/, 'gifts'],
+  [/עמל|בנק|פיננס/, 'fees'],
+  [/אינטרנט|מקוון|online|קניות/, 'online']
+];
+const normBranch = b => String(b??'').trim().replace(/\s+/g,' ');
+function branchCat(branch){
+  const b=normBranch(branch); if(!b) return null;
+  const user=(S.settings.branchMap||{})[b]; if (user && cats().some(c=>c.id===user)) return user;
+  return null;
+}
+function defaultBranchCat(branch){
+  const b=normBranch(branch); if(!b) return null;
+  for (const [re,id] of BRANCH_RULES) if (re.test(b) && cats().some(c=>c.id===id)) return id;
+  return null;
+}
+function importCat(desc, type, branch){
+  return learnedCat(desc,type) || (type==='expense' && branchCat(branch)) || kwCat(desc,type) || (type==='expense' && defaultBranchCat(branch)) || (type==='income' ? 'extra_inc' : 'uncat');
+}
 function autoCat(desc, type){
   const d = norm(desc);
-  // learned exact matches first
-  const learned = S.settings.learned||{};
-  for (const k of [d, stripInst(desc)]) if (learned[k] && cats().some(c=>c.id===learned[k] && (!type || c.kind===type))) return learned[k];
+  const lc = learnedCat(desc, type); if (lc) return lc;
   let best=null, bestLen=0;
   for (const c of cats()){
     if (type && c.kind!==type) continue;
@@ -962,6 +1010,7 @@ function setKind(m, kind){
   if (kind==='bank'){ m.mode=(m.debit>-1 && m.credit>-1)?'split':'negExpense'; if(m.skipCardCharges===undefined) m.skipCardCharges=true; m.amtIsTotal=false; }
   else m.mode='posExpense';
 }
+function detectBranchCol(h){ return (h||[]).findIndex(c=>/ענף|קטגורי|category|sector|סוג בית העסק|תחום/i.test(String(c)) && !/סוג עסקה|סוג כרטיס/.test(String(c))); }
 function guessMap(rows, forcedHi){
   let hi=forcedHi??0;
   if(forcedHi==null) for(let i=0;i<Math.min(rows.length,25);i++){ const r=rows[i].map(String); if(r.some(c=>H_DATE.test(c)) && r.filter(c=>c.trim()).length>=2){ hi=i; break; } }
@@ -976,10 +1025,11 @@ function guessMap(rows, forcedHi){
   const amtIsTotal=/עסקה|מקורי|קני/.test(h[amt]||'');
   const mode = (debit>-1&&credit>-1)?'split':'posExpense';
   const cardCol = h.findIndex(c=>/4 ספרות|ספרות אחרונות|מספר כרטיס|^כרטיס$|card/i.test(c));
+  const branchCol = detectBranchCol(h);
   const instCol=h.findIndex(c=>/פירוט נוסף|הערות|תשלום|installment/i.test(c) && !/תאריך|מועד|סכום|תשלומים/.test(c));
   const instOfCol=h.findIndex((c,i)=>i!==instCol && /תשלומים|מתוך/.test(c) && !/סוג|סכום/.test(c));
   const dealCol=h.findIndex((c,i)=>i!==amt && /סכום עסקה|סכום העסקה|סכום מקורי|סכום קני/.test(c));
-  return {hi, headers:h, date, desc, amt, debit, credit, mode, cardCol, instCol, instOfCol, dealCol, amtIsTotal, kind:null};
+  return {hi, headers:h, date, desc, amt, debit, credit, mode, cardCol, instCol, instOfCol, dealCol, amtIsTotal, kind:null, branchCol};
 }
 function parseDate(v){
   if (v instanceof Date && !isNaN(v)) return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
@@ -1045,12 +1095,25 @@ function buildImport(){
     // allow genuine same-day repeats inside the file, but skip rows already stored
     const n=(seen.get(key)||0)+1; seen.set(key,n);
     if (existing.has(key) && n===1){ dup++; const ex=existing.get(key); if(type==='expense' && !ex.inst && inst) fills.push({id:ex.id, inst}); continue; }
-    const catId = (I.overRow||{})[i] || (I.overDesc||{})[stripInst(desc)+'|'+type] || autoCat(desc,type);
+    const branch = (m.branchCol??-1)>-1 ? normBranch(r[m.branchCol]) : '';
+    const catId = (I.overRow||{})[i] || (I.overDesc||{})[stripInst(desc)+'|'+type] || importCat(desc,type,branch);
     if (isCardCharge) cardSkip++;
     const excluded = (I.exclRow && i in I.exclRow) ? I.exclRow[i] : isCardCharge;
-    out.push({id:uid(), date, desc, amount, type, catId, excluded, srcKind:m.kind||null, nec:null, note:'', source:'file', cardName:cn, inst, _row:i});
+    out.push({id:uid(), date, desc, amount, type, catId, excluded, srcKind:m.kind||null, branch:branch||undefined, nec:null, note:'', source:'file', cardName:cn, inst, _row:i});
   }
   return {out, skipped, dup, fills, cardSkip};
+}
+function branchPanelHTML(out){
+  const counts={}; out.forEach(t=>{ if(t.branch && t.type==='expense') counts[t.branch]=(counts[t.branch]||0)+1; });
+  const list=Object.entries(counts).sort((a,b)=>b[1]-a[1]); if(!list.length) return '';
+  const opts=sel=>`<option value="">אוטומטי${''}</option>`+catOptions('expense',sel);
+  return `<details style="margin:0 0 14px;background:var(--sunk);border-radius:12px;padding:10px 14px" ${list.some(([b])=>!branchCat(b)&&!defaultBranchCat(b))?'open':''}>
+    <summary style="cursor:pointer;font-weight:600">התאמת ענפים לקטגוריות (${list.length} ענפים בקובץ)</summary>
+    <p class="muted" style="font-size:.88rem;margin:8px 0">הענף מקובץ האשראי משמש לסיווג כשאין התאמה לפי שם בית העסק. בחירה כאן נשמרת לכל הקבצים הבאים, וגוברת על הזיהוי לפי שם העסק. סיווג שלימדתם לבית עסק מסוים תמיד גובר.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px">
+    ${list.map(([b,n])=>{ const u=branchCat(b), d=defaultBranchCat(b); return `<label style="display:flex;flex-direction:column;gap:3px;font-size:.88rem"><span>${esc(b)} <span class="muted">· ${n}${!u&&d?' · מוצע: '+esc(catById(d).name):''}</span></span>
+      <select data-branch="${esc(b)}" style="background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 8px">${`<option value="">${d?'אוטומטי ('+esc(catById(d).name)+')':'אוטומטי לפי שם העסק'}</option>`+catOptions('expense',u||'')}</select></label>`; }).join('')}
+    </div></details>`;
 }
 function renderImport(){
   const I=S.imp;
@@ -1084,7 +1147,7 @@ function renderImport(){
   app.innerHTML = `
   <div class="panel">
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
-      <h2 style="margin:0">${esc(I.name)}</h2><button class="btn ghost small" id="impCancel">${I.item?'עצירת הקליטה מהתיקייה':'קובץ אחר'}</button>
+      <h2 style="margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span aria-hidden="true">📄</span>${esc(I.name)}${I.path&&I.path.startsWith('gdrive:')?'<span class="badge" style="font-weight:500">מ-Google Drive</span>':(I.item?'<span class="badge" style="font-weight:500">מהתיקייה</span>':'')}</h2><button class="btn ghost small" id="impCancel">${I.item?'עצירת הקליטה מהתיקייה':'קובץ אחר'}</button>
     </div>
     ${I.item?`<p class="muted" style="margin:6px 0 0">קובץ חדש מהתיקייה בפורמט שעוד לא הוגדר. בדקו את העמודות פעם אחת, והמערכת תזכור אותן לכל הקבצים הבאים בפורמט הזה.${S.queue.length?` עוד ${S.queue.length} קבצים בתור.`:''}</p>`:''}
     <div style="margin:14px 0 4px;padding:12px 14px;border-radius:var(--radius-s);background:var(--sunk)${m.kind?'':';outline:2px solid var(--imp)'}">
@@ -1112,6 +1175,7 @@ function renderImport(){
         :`<div class="field"><label>עמודת סכום</label><select id="mAmt">${colOpts(m.amt)}</select></div>`}
       <div class="field"><label>עמודת מספר כרטיס (אם יש)</label><select id="mCardCol">${colOpts(m.cardCol)}</select></div>
       ${m.kind!=='bank'?`<div class="field" style="justify-content:flex-end"><label class="chk" style="color:var(--ink)"><input type="checkbox" id="mAmtTotal" ${m.amtIsTotal?'checked':''}> בעסקאות בתשלומים, עמודת הסכום היא סכום העסקה הכולל (לחלק במספר התשלומים)</label></div>`:''}
+      <div class="field"><label>עמודת ענף / קטגוריה (אם יש)</label><select id="mBranch">${colOpts(m.branchCol??-1)}</select></div>
       <div class="field"><label>עמודת פרטי תשלומים (אם יש)</label><select id="mInst">${colOpts(m.instCol??-1)}</select></div>
       <div class="field"><label>עמודת סכום העסקה הכולל (אם יש)</label><select id="mDeal">${colOpts(m.dealCol??-1)}</select></div>
       <div class="field"><label for="impCard">${m.cardCol>-1?'כרטיס לשורות בלי מספר':'מאיזה כרטיס או חשבון הקובץ'}</label>
@@ -1119,6 +1183,7 @@ function renderImport(){
     </div>
     <p style="margin:6px 0 14px"><strong>${out.length}</strong> תנועות מוכנות לקליטה: ${fmt(exp)} הוצאות, ${fmt(inc)} הכנסות.${out.some(t=>t.inst)?` ${out.filter(t=>t.inst).length} מהן חיובים בתשלומים.`:''}
       <span class="muted">${dup?` ${dup} כבר קיימות ויידלגו.`:''}${skipped?` ${skipped} שורות ללא תאריך/סכום יידלגו.`:''}${cardSkip?` ${cardSkip} חיובי חברות אשראי יסומנו כלא נכללים בדוחות.`:''}${uncat?` ${uncat} לא זוהו ויסומנו כלא מסווגות.`:''}</span></p>
+    ${branchPanelHTML(out)}
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="impGo" ${m.kind&&(out.length||fills.length)?'':'disabled'}>${!m.kind?'בחרו סוג קובץ':out.length?`קליטת ${out.length} תנועות`:`עדכון פרטי תשלומים ב-${fills.length} תנועות`}</button>${I.item?'<button class="btn" id="impSkip">דילוג על הקובץ</button>':''}</div>
   </div>
   ${out.length?`<h3 style="margin-top:22px">תצוגה מקדימה</h3><div class="table-wrap"><table><thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th>כרטיס</th><th style="text-align:center">בדוחות</th><th style="text-align:left">סכום</th></tr></thead><tbody>
@@ -1136,6 +1201,8 @@ function renderImport(){
   app.querySelector('#mDebit')?.addEventListener('change',()=>{ m.debit=num('#mDebit'); renderImport(); });
   app.querySelector('#mCredit')?.addEventListener('change',()=>{ m.credit=num('#mCredit'); renderImport(); });
   app.querySelector('#mAmtTotal')?.addEventListener('change',e=>{ m.amtIsTotal=e.target.checked; renderImport(); });
+  app.querySelectorAll('[data-branch]').forEach(s=>s.onchange=()=>{ const b=s.dataset.branch; S.settings.branchMap ||= {}; if(s.value) S.settings.branchMap[b]=s.value; else delete S.settings.branchMap[b]; Store.saveSettings(); renderImport(); });
+  app.querySelector('#mBranch').onchange=()=>{ m.branchCol=num('#mBranch'); renderImport(); };
   app.querySelector('#mInst').onchange=()=>{ m.instCol=num('#mInst'); renderImport(); };
   app.querySelector('#mDeal').onchange=()=>{ m.dealCol=num('#mDeal'); renderImport(); };
   app.querySelector('#mCardCol').onchange=()=>{ m.cardCol=num('#mCardCol'); renderImport(); };
@@ -1468,7 +1535,7 @@ function saveProfile(){
 }
 function findProfile(rows){
   const P=S.settings.importProfiles||{};
-  for (let i=0;i<Math.min(rows.length,25);i++){ const sig=sigOf(rows[i]); if(sig && P[sig]){ const map={...P[sig].map, hi:i, headers:rows[i].map(c=>String(c).trim())}; if(!map.kind) map.kind = map.mode==='posExpense'?'credit':'bank'; return {map, cardName:P[sig].cardName, sig}; } }
+  for (let i=0;i<Math.min(rows.length,25);i++){ const sig=sigOf(rows[i]); if(sig && P[sig]){ const map={...P[sig].map, hi:i, headers:rows[i].map(c=>String(c).trim())}; if(!map.kind) map.kind = map.mode==='posExpense'?'credit':'bank'; if(map.branchCol===undefined) map.branchCol=detectBranchCol(map.headers); return {map, cardName:P[sig].cardName, sig}; } }
   return null;
 }
 function cardFromName(n){
@@ -1687,7 +1754,7 @@ async function scanDriveData(interactive){
   try{
     const fs=await GD.list(GD.dataId);
     const items=fs.filter(f=>f.mimeType===GSHEET_MIME || isSheet(f.name)).map(f=>({path:'gdrive:'+f.id,
-      file:{name:isSheet(f.name)?f.name:f.name+'.xlsx', size:+f.size||0, lastModified:Date.parse(f.modifiedTime), arrayBuffer:()=>GD.download(f)}}));
+      file:{name:isSheet(f.name)?f.name:f.name+'.xlsx', displayName:f.name, source:'drive', size:+f.size||0, lastModified:Date.parse(f.modifiedTime), arrayBuffer:()=>GD.download(f)}}));
     await queueFiles(items, interactive);
   }catch(e){ if(interactive && e.message!=='expired') toast(driveErr(e)); }
 }
@@ -1860,10 +1927,10 @@ async function processQueue(interactive){
     if (rows.length<2){ markFile(it); continue; }
     const prof=findProfile(rows), fcard=cardFromName(it.file.name);
     if (prof){
-      S.imp={name:it.path, rows, map:prof.map, cardName:fcard||prof.cardName||'', item:it};
+      S.imp={name:it.file.displayName||it.file.name, path:it.path, rows, map:prof.map, cardName:fcard||prof.cardName||'', item:it};
       const b=buildImport(); commitImport(b.out,b.fills); markFile(it); continue;
     }
-    S.imp={name:it.path, rows, map:guessMap(rows), cardName:fcard, item:it};
+    S.imp={name:it.file.displayName||it.file.name, path:it.path, rows, map:guessMap(rows), cardName:fcard, item:it};
     if (interactive || S.tab==='import'){ S.tab='import'; render(); }
     else toast(`בתיקייה יש קובץ חדש בפורמט שעוד לא הוגדר: ${it.file.name}`,[{label:'להגדרה',fn:()=>{ S.tab='import'; render(); }}]);
     return;
