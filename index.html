@@ -1023,7 +1023,9 @@ function guessMap(rows, forcedHi){
   if(forcedHi==null) for(let i=0;i<Math.min(rows.length,25);i++){ const r=rows[i].map(String); if(r.some(c=>H_DATE.test(c)) && r.filter(c=>c.trim()).length>=2){ hi=i; break; } }
   const h=rows[hi].map(c=>String(c).trim());
   const find=(re,skip=[])=>h.findIndex((c,i)=>re.test(c)&&!skip.includes(i));
-  const date=find(H_DATE); const desc=find(H_DESC,[date]);
+  const chargeCol=h.findIndex(c=>/תאריך\s*ה?חיוב|מועד\s*ה?חיוב|charge date|billing date/i.test(c));
+  let date=h.findIndex((c,i)=>i!==chargeCol && /תאריך\s*(ה)?(עסקה|רכישה|ביצוע|קניה|קנייה)/.test(c)); if(date<0) date=h.findIndex((c,i)=>i!==chargeCol && H_DATE.test(c)); if(date<0) date=chargeCol;
+  const desc=find(H_DESC,[date,chargeCol]);
   const debit=find(H_DEBIT), credit=find(H_CREDIT,[debit]);
   // prefer "סכום חיוב" over "סכום עסקה"
   let amt=h.findIndex(c=>/סכום\s*ה?חיוב|לחיוב|חיוב בש|charge/i.test(c));
@@ -1036,7 +1038,7 @@ function guessMap(rows, forcedHi){
   const instCol=h.findIndex(c=>/פירוט נוסף|הערות|תשלום|installment/i.test(c) && !/תאריך|מועד|סכום|תשלומים/.test(c));
   const instOfCol=h.findIndex((c,i)=>i!==instCol && /תשלומים|מתוך/.test(c) && !/סוג|סכום/.test(c));
   const dealCol=h.findIndex((c,i)=>i!==amt && /סכום עסקה|סכום העסקה|סכום מקורי|סכום קני/.test(c));
-  return {hi, headers:h, date, desc, amt, debit, credit, mode, cardCol, instCol, instOfCol, dealCol, amtIsTotal, kind:null, branchCol};
+  return {hi, headers:h, date, desc, amt, debit, credit, mode, cardCol, instCol, instOfCol, dealCol, amtIsTotal, kind:null, branchCol, chargeCol: chargeCol===date?-1:chargeCol};
 }
 function parseDate(v){
   if (v instanceof Date && !isNaN(v)) return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
@@ -1079,7 +1081,7 @@ function rowInst(r, m, desc, amount){
 }
 const nearAmt=(a,b)=>Math.abs(a-b)<=Math.max(1,Math.abs(b)*0.02);
 const r2=x=>Math.round(x*100)/100;
-const MAP_KEYS=['date','desc','amt','debit','credit','cardCol','instCol','instOfCol','dealCol','branchCol'];
+const MAP_KEYS=['date','desc','amt','debit','credit','cardCol','instCol','instOfCol','dealCol','branchCol','chargeCol'];
 function isHeaderRow(row){
   const cells=row.map(c=>String(c??'').trim()).filter(Boolean);
   if (cells.length<2 || cells.some(c=>parseDate(c) || (typeof c==='number'))) return false;
@@ -1091,6 +1093,8 @@ function buildImport(){
   let skipped=0, dup=0, cardSkip=0;
   const st={sections:1, sheets:I.rows.sheets||1, dates:[], instRows:0, instDerived:0, cards:new Set(), branches:new Set(), extraCols:new Set(), foreign:0, sectionNames:[]};
   const seen=new Map();
+  let maxMonth=''; for (let i=m.hi+1;i<I.rows.length;i++){ const d=parseDate(I.rows[i][m.date]); if(d && d.slice(0,7)>maxMonth) maxMonth=d.slice(0,7); }
+  st.instMoved=0;
   // column map for the current section; files can hold several tables (e.g. local and abroad)
   let cm={}; MAP_KEYS.forEach(k=>cm[k]=m[k]??-1); let heads=m.headers||[];
   const baseHeads=m.headers||[];
@@ -1102,7 +1106,9 @@ function buildImport(){
       MAP_KEYS.forEach(k=>{ const name=baseHeads[m[k]]; const idx=name?nh.indexOf(name):-1; cm[k]= idx>-1 ? idx : (g[k]??-1); });
       heads=nh; st.sections++; if(lastLabel) st.sectionNames.push(lastLabel); continue;
     }
-    const date=parseDate(r[cm.date]); const desc=String(r[cm.desc]??'').trim();
+    let date=parseDate(r[cm.date]); const desc=String(r[cm.desc]??'').trim();
+    const chargeDate = cm.chargeCol>-1 ? parseDate(r[cm.chargeCol]) : null;
+    let purchaseDate=null;
     let amount=null, type='expense';
     if (m.mode==='split'){
       const d=parseAmt(r[cm.debit]), c=parseAmt(r[cm.credit]);
@@ -1123,6 +1129,12 @@ function buildImport(){
         if (nearAmt(amount, deal) && !nearAmt(amount*inst.of, deal)){ inst.total=r2(deal); amount=r2(deal/inst.of); inst.derived=true; st.instDerived++; }   // the charge column holds the full deal
         else inst.total=r2(deal);                                                                                                                   // charge is the monthly payment
       } else if (m.amtIsTotal){ inst.total=amount; amount=r2(amount/inst.of); inst.derived=true; st.instDerived++; }
+      // an installment is charged on the billing date, not on the purchase date
+      if (chargeDate && chargeDate!==date){ purchaseDate=date; date=chargeDate; st.instMoved++; }
+      else if (!chargeDate && inst.n>1 && maxMonth && date.slice(0,7)<maxMonth){
+        const est=shiftMonth(date.slice(0,7), inst.n-1);
+        if (est>date.slice(0,7) && est<=maxMonth){ const [yy,mo]=est.split('-').map(Number); const day=Math.min(+date.slice(8,10), new Date(yy,mo,0).getDate()); purchaseDate=date; date=est+'-'+String(day).padStart(2,'0'); st.instMoved++; }
+      }
     }
     const key=date+'|'+norm(desc)+'|'+amount.toFixed(2)+'|'+type+'|'+norm(cn);
     // allow genuine same-day repeats inside the file, but skip rows already stored
@@ -1136,7 +1148,7 @@ function buildImport(){
     const used=new Set(MAP_KEYS.map(k=>cm[k]).filter(x=>x>-1)); let extra=null;
     heads.forEach((hd,ci)=>{ if(!hd || used.has(ci)) return; let v=r[ci]; if(v===''||v==null) return; if(v instanceof Date) v=parseDate(v); v=String(v).trim(); if(!v) return; (extra ||= {})[hd]=v.slice(0,80); st.extraCols.add(hd); if(/מטבע|currency/i.test(hd) && !/₪|ש"ח|ש״ח|ils|nis|שקל/i.test(v)) st.foreign++; });
     st.dates.push(date); if(cn) st.cards.add(cn); if(branch) st.branches.add(branch);
-    out.push({id:uid(), date, desc, amount, type, catId, excluded, srcKind:m.kind||null, branch:branch||undefined, extra:extra||undefined, nec:null, note:'', source:'file', cardName:cn, inst, _row:i});
+    out.push({id:uid(), date, desc, amount, type, catId, excluded, srcKind:m.kind||null, branch:branch||undefined, extra:extra||undefined, purchaseDate:purchaseDate||undefined, chargeDate:(chargeDate&&chargeDate!==date)?chargeDate:undefined, nec:null, note:'', source:'file', cardName:cn, inst, _row:i});
   }
   st.dates.sort();
   return {out, skipped, dup, fills, cardSkip, st};
@@ -1148,7 +1160,7 @@ function analysisHTML(st, out){
   if (st.dates.length) items.push(`תאריכים: ${fmtD(st.dates[0])} עד ${fmtD(st.dates[st.dates.length-1])}`);
   items.push(`${exp.length} הוצאות${inc.length?`, ${inc.length} הכנסות / זיכויים`:''}`);
   if (st.cards.size) items.push(`כרטיסים: ${[...st.cards].map(esc).join(', ')}`);
-  if (st.instRows) items.push(`${st.instRows} חיובים בתשלומים${st.instDerived?` (ב-${st.instDerived} הסכום בקובץ הוא סכום העסקה, והתשלום החודשי חושב ממנו)`:''}`);
+  if (st.instRows) items.push(`${st.instRows} חיובים בתשלומים${st.instDerived?` (ב-${st.instDerived} הסכום בקובץ הוא סכום העסקה, והתשלום החודשי חושב ממנו)`:''}${st.instMoved?`. ${st.instMoved} מהם שויכו לתאריך החיוב במקום לתאריך הרכישה`:''}`);
   if (st.branches.size) items.push(`${st.branches.size} ענפים`);
   if (st.foreign) items.push(`${st.foreign} עסקאות במטבע חוץ`);
   if (st.extraCols.size) items.push(`נתונים נוספים שנשמרים לכל תנועה: ${[...st.extraCols].map(esc).join(', ')}`);
@@ -1225,14 +1237,15 @@ function branchPanelHTML(out){
 }
 function renderImport(){
   const I=S.imp;
+  if (!I && S.pick){ renderPicker(); return; }
   if (!I){
     app.innerHTML = `
     <div class="stack">
       ${folderPanelHTML()}
       <label class="drop" id="drop" tabindex="0">
-        <strong>גררו לכאן קובץ, או לחצו לבחירה</strong>
+        <strong>גררו לכאן קובץ אחד או כמה, או לחצו לבחירה</strong>
         <span class="muted">Excel (xlsx, xls) או CSV · פירוט חשבון בנק או חיובי כרטיס אשראי</span>
-        <input type="file" id="file" accept=".csv,.xlsx,.xls,.txt,.tsv" hidden>
+        <input type="file" id="file" accept=".csv,.xlsx,.xls,.txt,.tsv" multiple hidden>
       </label>
       <div class="panel">
         <h3>איך זה עובד</h3>
@@ -1243,8 +1256,8 @@ function renderImport(){
     drop.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); inp.click(); } };
     ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.add('over'); }));
     ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{ e.preventDefault(); drop.classList.remove('over'); }));
-    drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
-    inp.onchange=()=>{ if(inp.files[0]) handleFile(inp.files[0]); };
+    drop.addEventListener('drop',e=>{ const fs=[...e.dataTransfer.files].filter(f=>isSheet(f.name)); if(fs.length>1) openPicker(fs.map(f=>({file:f, path:'upload:'+f.name}))); else if(fs[0]||e.dataTransfer.files[0]) handleFile(fs[0]||e.dataTransfer.files[0]); });
+    inp.onchange=()=>{ const fs=[...inp.files]; if(fs.length>1) openPicker(fs.map(f=>({file:f, path:'upload:'+f.name}))); else if(fs[0]) handleFile(fs[0]); };
     bindFolderPanel();
     renderFilesList();
     return;
@@ -1256,8 +1269,9 @@ function renderImport(){
   app.innerHTML = `
   <div class="panel">
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
-      <h2 style="margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span aria-hidden="true">📄</span>${esc(I.name)}${I.path&&I.path.startsWith('gdrive:')?'<span class="badge" style="font-weight:500">מ-Google Drive</span>':(I.item?'<span class="badge" style="font-weight:500">מהתיקייה</span>':'')}</h2><button class="btn ghost small" id="impCancel">${I.item?'עצירת הקליטה מהתיקייה':'קובץ אחר'}</button>
+      <h2 style="margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span aria-hidden="true">📄</span>${esc(I.name)}${I.path&&I.path.startsWith('gdrive:')?'<span class="badge" style="font-weight:500">מ-Google Drive</span>':((I.item && !(I.path||'').startsWith('upload:'))?'<span class="badge" style="font-weight:500">מהתיקייה</span>':'')}</h2><button class="btn ghost small" id="impCancel">${I.item?'עצירת הקליטה מהתיקייה':'קובץ אחר'}</button>
     </div>
+    ${m.fromCard?`<p style="margin:8px 0 0;padding:8px 12px;border-radius:10px;background:var(--inc-soft)">✅ הוחלו הגדרות הטעינה ששמרתם ל${esc(m.fromCard)}. אפשר לשנות אותן כאן.</p>`:''}
     ${I.replaceFileId?`<p style="margin:8px 0 0;padding:8px 12px;border-radius:10px;background:var(--imp-soft)">🔁 קליטה מחדש: ${allTx().filter(t=>t.fileId===I.replaceFileId).length} התנועות שנקלטו מהקובץ הזה יוחלפו בתוצאה החדשה. סיווגים והחרגות שעשיתם יישמרו לתנועות שלא השתנו.</p>`:''}
     ${I.item?`<p class="muted" style="margin:6px 0 0">קובץ חדש מהתיקייה בפורמט שעוד לא הוגדר. בדקו את העמודות פעם אחת, והמערכת תזכור אותן לכל הקבצים הבאים בפורמט הזה.${S.queue.length?` עוד ${S.queue.length} קבצים בתור.`:''}</p>`:''}
     <div style="margin:14px 0 4px;padding:12px 14px;border-radius:var(--radius-s);background:var(--sunk)${m.kind?'':';outline:2px solid var(--imp)'}">
@@ -1285,6 +1299,7 @@ function renderImport(){
         :`<div class="field"><label>עמודת סכום</label><select id="mAmt">${colOpts(m.amt)}</select></div>`}
       <div class="field"><label>עמודת מספר כרטיס (אם יש)</label><select id="mCardCol">${colOpts(m.cardCol)}</select></div>
       ${m.kind!=='bank' && (m.dealCol??-1)<0?`<div class="field" style="justify-content:flex-end"><label class="chk" style="color:var(--ink)"><input type="checkbox" id="mAmtTotal" ${m.amtIsTotal?'checked':''}> בעסקאות בתשלומים, עמודת הסכום היא סכום העסקה הכולל (לחלק במספר התשלומים)</label></div>`:''}
+      <div class="field"><label>עמודת תאריך חיוב (אם יש)</label><select id="mCharge">${colOpts(m.chargeCol??-1)}</select></div>
       <div class="field"><label>עמודת ענף / קטגוריה (אם יש)</label><select id="mBranch">${colOpts(m.branchCol??-1)}</select></div>
       <div class="field"><label>עמודת פרטי תשלומים (אם יש)</label><select id="mInst">${colOpts(m.instCol??-1)}</select></div>
       <div class="field"><label>עמודת סכום העסקה הכולל (אם יש)</label><select id="mDeal">${colOpts(m.dealCol??-1)}</select></div>
@@ -1312,7 +1327,8 @@ function renderImport(){
   app.querySelector('#mDebit')?.addEventListener('change',()=>{ m.debit=num('#mDebit'); renderImport(); });
   app.querySelector('#mCredit')?.addEventListener('change',()=>{ m.credit=num('#mCredit'); renderImport(); });
   app.querySelector('#mAmtTotal')?.addEventListener('change',e=>{ m.amtIsTotal=e.target.checked; renderImport(); });
-  app.querySelectorAll('[data-branch]').forEach(s=>s.onchange=()=>{ const b=s.dataset.branch; S.settings.branchMap ||= {}; if(s.value) S.settings.branchMap[b]=s.value; else delete S.settings.branchMap[b]; Store.saveSettings(); renderImport(); });
+  app.querySelectorAll('[data-branch]').forEach(s=>s.onchange=()=>{ const b=s.dataset.branch; S.settings.branchMap ||= {}; if(s.value) S.settings.branchMap[b]=s.value; else delete S.settings.branchMap[b]; Store.saveSettings(); if(ACTIVE===GD) GD.saveImportSettings(); renderImport(); });
+  app.querySelector('#mCharge').onchange=()=>{ m.chargeCol=num('#mCharge'); renderImport(); };
   app.querySelector('#mBranch').onchange=()=>{ m.branchCol=num('#mBranch'); renderImport(); };
   app.querySelector('#mInst').onchange=()=>{ m.instCol=num('#mInst'); renderImport(); };
   app.querySelector('#mDeal').onchange=()=>{ m.dealCol=num('#mDeal'); renderImport(); };
@@ -1332,7 +1348,7 @@ function renderImport(){
   app.querySelector('#impCancel').onclick=()=>{ if(I.item){ S.queue=[]; S.imp=null; finishBatch(); } else { S.imp=null; renderImport(); } };
   app.querySelector('#impSkip')?.addEventListener('click',()=>{ markFile(I.item); S.imp=null; processQueue(true); });
   app.querySelector('#impGo').onclick=()=>{
-    saveProfile();
+    saveProfile(st.cards);
     if (I.item){ commitImport(out,fills); markFile(I.item); S.imp=null; processQueue(true); return; }
     const uncat=commitImport(out,fills); if(!out.length){ S.imp=null; render(); toast(fills.length?`עודכנו פרטי תשלומים ב-${fills.length} תנועות קיימות`:'לא נקלטו תנועות'); return; } const months=[...new Set(out.map(t=>t.date.slice(0,7)))].sort();
     S.imp=null; goMonth(months[months.length-1]); S.tab = uncat? 'tx':'overview';
@@ -1344,8 +1360,8 @@ async function handleFile(file, replaceId){
   try{
     const rows=await readFile(file);
     if(rows.length<2){ toast('הקובץ ריק או שאין בו טבלה שאפשר לקרוא.'); return; }
-    const prof=findProfile(rows);
-    S.batch=null; S.imp={name:file.name, path:'upload:'+file.name, rows, map:prof?prof.map:autoKind(guessMap(rows),file.name), cardName:cardFromName(file.name)||(prof&&prof.cardName)||'', replaceFileId:replaceId||null}; S.tab='import'; render();
+    const prof=findProfile(rows, file.name);
+    S.batch=null; S.imp={name:file.name, path:'upload:'+file.name, rows, map:prof?prof.map:autoKind(guessMap(rows),file.name), cardName:cardHint(rows,file.name)||(prof&&prof.cardName)||'', replaceFileId:replaceId||null}; S.tab='import'; render();
   }catch(e){ toast(e.message && /ספרייה|ספריית/.test(e.message)? e.message : 'לא הצלחתי לקרוא את הקובץ. ודאו שזה Excel או CSV.'); }
 }
 
@@ -1470,7 +1486,7 @@ function loanList(){
     const total=+d.total||0;
     return {key, d, txs, toRef, name:d.name || (last?last.desc:'הלוואה'), desc:last?last.desc:'', monthly, N, n, left,
       leftAmt: left!==null ? left*monthly : null, end: left!==null ? shiftMonth(lastM,left) : null, start,
-      paid: toRef.reduce((a,t)=>a+t.amount,0), total, interest: N&&total ? N*monthly-total : null, done: left===0, card:(last||{}).card};
+      paid: toRef.reduce((a,t)=>a+t.amount,0), total, lastDay: last ? +last.date.slice(8,10) : 0, interest: N&&total ? N*monthly-total : null, done: left===0, card:(last||{}).card};
   });
 }
 let loanCtx=null;
@@ -1519,9 +1535,9 @@ function renderLoans(){
     <td>${l.N?`<div style="display:flex;align-items:center;gap:8px"><div class="prog" style="flex:1"><span style="width:${l.n/l.N*100}%"></span></div><span style="white-space:nowrap">${l.n} מתוך ${l.N}</span></div>`:`<span style="white-space:nowrap">${l.n} תשלומים</span> <button class="btn ghost small" data-ledit>הוספת פרטים</button>`}</td>
     <td style="white-space:nowrap">${l.left!==null?`${l.left} תשלומים<div class="muted" style="font-size:.82rem">${fmt(l.leftAmt)}</div>`:'—'}</td>
     <td class="amt">${l.total?fmt(l.total):'—'}${l.interest>0?`<div class="muted" style="font-size:.78rem;font-weight:400">עלות ריבית ${fmt(l.interest)}</div>`:''}</td>
-    <td style="white-space:nowrap">${l.end?monthLabel(l.end):'—'}</td>
+    <td style="white-space:nowrap">${l.end?(l.lastDay?fmtD(l.end+'-'+String(Math.min(l.lastDay,new Date(+l.end.slice(0,4),+l.end.slice(5,7),0).getDate())).padStart(2,'0'))+`<div class="muted" style="font-size:.8rem">${monthLabel(l.end)}</div>`:monthLabel(l.end)):'—'}</td>
     <td><button class="icon-btn" data-ledit aria-label="עריכת פרטי ההלוואה">✎</button></td></tr>`;
-  const head=`<thead><tr><th>הלוואה</th><th style="text-align:left">תשלום חודשי</th><th>שולמו</th><th>נשארו</th><th style="text-align:left">סך ההלוואה</th><th>תשלום אחרון</th><th></th></tr></thead>`;
+  const head=`<thead><tr><th>הלוואה</th><th style="text-align:left">תשלום חודשי</th><th>שולמו</th><th>נשארו</th><th style="text-align:left">סך ההלוואה</th><th>חיוב אחרון</th><th></th></tr></thead>`;
   app.innerHTML=`
   <div class="hero">
     <p class="hero-line">${act.length?`יש לכם <b>${act.length}</b> הלוואות פעילות, עם החזר חודשי של <b class="exp">${fmt(monthly)}</b>.`:'אין הלוואות פעילות.'}</p>
@@ -1561,7 +1577,7 @@ function plans(){
       if (t.inst.total) cur.total=t.inst.total;
     });
   });
-  out.forEach(p=>{ p.start=shiftMonth(p.last.date.slice(0,7), -(p.last.inst.n-1)); p.amount=p.last.amount; p.looksTotal = p.txs.every(t=>!t.inst.split && t.inst.total && t.amount>=t.inst.total*0.98); p.end=shiftMonth(p.start,p.of-1); if(!p.total) p.total=p.amount*p.of; });
+  out.forEach(p=>{ p.start=shiftMonth(p.last.date.slice(0,7), -(p.last.inst.n-1)); p.amount=p.last.amount; p.looksTotal = p.txs.every(t=>!t.inst.split && t.inst.total && t.amount>=t.inst.total*0.98); p.end=shiftMonth(p.start,p.of-1); { const [yy,mo]=p.end.split('-').map(Number); p.endDate=p.end+'-'+String(Math.min(+p.last.date.slice(8,10)||1,new Date(yy,mo,0).getDate())).padStart(2,'0'); } if(!p.total) p.total=p.amount*p.of; });
   return out;
 }
 function planAt(p, ref){
@@ -1638,12 +1654,12 @@ function renderInst(){
     <td><div style="display:flex;align-items:center;gap:8px"><div class="prog" style="flex:1"><span style="width:${x.s.nAt/x.p.of*100}%"></span></div><span style="white-space:nowrap">${x.s.nAt} מתוך ${x.p.of}</span></div></td>
     <td style="white-space:nowrap">${x.s.left} תשלומים<div class="muted" style="font-size:.82rem">${fmt(x.s.leftAmt)}</div></td>
     <td class="amt">${fmt(x.p.total)}</td>
-    <td style="white-space:nowrap">${monthLabel(x.p.end)}</td></tr>${(issuesOf.get(x.p)||[]).length?`<tr class="issue-row" data-plan="${all.indexOf(x.p)}"><td colspan="6" style="background:var(--imp-soft)">${issuesOf.get(x.p).map((is,ii)=>`<div style="margin:2px 0">⚠️ ${is.msg} ${is.acts.map((a,ai)=>`<button class="btn ${a.primary?'primary':''} small" data-iss="${ii}:${ai}">${a.label}</button>`).join(' ')}</div>`).join('')}</td></tr>`:''}`;
+    <td style="white-space:nowrap">${fmtD(x.p.endDate)}<div class="muted" style="font-size:.8rem">${monthLabel(x.p.end)}</div></td></tr>${(issuesOf.get(x.p)||[]).length?`<tr class="issue-row" data-plan="${all.indexOf(x.p)}"><td colspan="6" style="background:var(--imp-soft)">${issuesOf.get(x.p).map((is,ii)=>`<div style="margin:2px 0">⚠️ ${is.msg} ${is.acts.map((a,ai)=>`<button class="btn ${a.primary?'primary':''} small" data-iss="${ii}:${ai}">${a.label}</button>`).join(' ')}</div>`).join('')}</td></tr>`:''}`;
   const nIssues=[...issuesOf.values()].reduce((a,x)=>a+x.length,0);
   app.innerHTML=`
   <div class="hero">
     <p class="hero-line">${active.length+future.length?`יש לכם <b>${active.length+future.length}</b> עסקאות בתשלומים פתוחות, ונשאר לשלם עליהן <b class="exp">${fmt(leftTotal)}</b>.`:`אין עסקאות בתשלומים פתוחות ב${monthLabel(ref)}.`}</p>
-    <div class="hero-net muted">המצב נכון ל${monthLabel(ref)}. ${loads[0].v?`בחודש הבא יחויבו ${fmt(loads[0].v)} על תשלומים.`:''} חודשים שעוד לא נקלטו מחושבים לפי התשלום האחרון שנקלט.</div>
+    <div class="hero-net muted">המצב נכון ל${monthLabel(ref)}. ${loads[0].v?`בחודש הבא יחויבו ${fmt(loads[0].v)} על תשלומים.`:''} החודשים מחושבים לפי מועד החיוב בכרטיס. חודשים שעוד לא נקלטו מחושבים לפי החיוב האחרון שנקלט.</div>
   </div>
   ${!S.settings.instOk && rows.some(x=>x.p.looksTotal)?`<div class="panel" style="margin-bottom:18px;border-color:var(--imp)">
     <strong>התשלום החודשי נראה גבוה?</strong> אם בעמודת "תשלום חודשי" מופיע סכום העסקה הכולל, אפשר לתקן: הסכום יחולק במספר התשלומים בכל החיובים, וכל הנתונים יתעדכנו.
@@ -1651,9 +1667,9 @@ function renderInst(){
   ${nIssues?`<div class="panel" style="margin-bottom:18px;border-color:var(--imp)">⚠️ <strong>נמצאו ${nIssues} בעיות אפשריות בנתוני התשלומים.</strong> הן מסומנות בצהוב מתחת לעסקאות. המערכת בודקת שהתשלום החודשי × מספר התשלומים מתאים לסכום העסקה, ושאותו חיוב לא נקלט פעמיים מקבצים שונים.</div>`:''}
   <div class="panel trend" style="margin-bottom:18px"><h2>כמה תשלומים יחויבו בכל חודש</h2>${svg}
     <p class="muted" style="margin:6px 0 0;font-size:.9rem">ככל שעסקאות מסתיימות, העמודות יורדות. הסכום שמתפנה הוא כסף שאפשר להעביר לחיסכון.</p></div>
-  ${active.length?`<h2>תשלומים פעילים</h2><div class="table-wrap"><table><thead><tr><th>עסקה</th><th style="text-align:left">תשלום חודשי</th><th>שולמו</th><th>נשארו</th><th style="text-align:left">סכום העסקה</th><th>תשלום אחרון</th></tr></thead><tbody>${active.map(row).join('')}</tbody></table></div>`:''}
-  ${future.length?`<h2 style="margin-top:22px">עוד לא התחילו</h2><div class="table-wrap"><table><thead><tr><th>עסקה</th><th style="text-align:left">תשלום חודשי</th><th>שולמו</th><th>נשארו</th><th style="text-align:left">סכום העסקה</th><th>תשלום אחרון</th></tr></thead><tbody>${future.map(row).join('')}</tbody></table></div>`:''}
-  ${done.length?`<h2 style="margin-top:22px">הסתיימו לאחרונה</h2><ul class="sav-list panel" style="padding:4px 20px">${done.map(x=>`<li><span>${esc(x.p.desc)} <span class="muted" style="font-size:.85rem">· ${x.p.of} תשלומים</span></span><span class="amt" style="color:var(--inc)">${fmt(x.p.amount)} בחודש התפנו</span><span class="tip">התשלום האחרון היה ב${monthLabel(x.p.end)}.</span></li>`).join('')}</ul>`:''}`;
+  ${active.length?`<h2>תשלומים פעילים</h2><div class="table-wrap"><table><thead><tr><th>עסקה</th><th style="text-align:left">תשלום חודשי</th><th>שולמו</th><th>נשארו</th><th style="text-align:left">סכום העסקה</th><th>חיוב אחרון</th></tr></thead><tbody>${active.map(row).join('')}</tbody></table></div>`:''}
+  ${future.length?`<h2 style="margin-top:22px">עוד לא התחילו</h2><div class="table-wrap"><table><thead><tr><th>עסקה</th><th style="text-align:left">תשלום חודשי</th><th>שולמו</th><th>נשארו</th><th style="text-align:left">סכום העסקה</th><th>חיוב אחרון</th></tr></thead><tbody>${future.map(row).join('')}</tbody></table></div>`:''}
+  ${done.length?`<h2 style="margin-top:22px">הסתיימו לאחרונה</h2><ul class="sav-list panel" style="padding:4px 20px">${done.map(x=>`<li><span>${esc(x.p.desc)} <span class="muted" style="font-size:.85rem">· ${x.p.of} תשלומים</span></span><span class="amt" style="color:var(--inc)">${fmt(x.p.amount)} בחודש התפנו</span><span class="tip">החיוב האחרון היה ב-${fmtD(x.p.endDate)}.</span></li>`).join('')}</ul>`:''}`;
   bindCommon();
   app.querySelectorAll('tr[data-plan]').forEach(tr=>{
     const p=all[+tr.dataset.plan];
@@ -1688,7 +1704,7 @@ function commitImport(out, fills=[]){
   const ds=out.map(t=>t.date).sort();
   const {headers, ...map}=I.map;
   (S.settings.files ||= {})[fid]={id:fid, name:I.name, path:I.path||('upload:'+I.name), mime:I.mime||null,
-    source: (I.path||'').startsWith('gdrive:') ? 'drive' : (I.item||(I.path&&!I.path.startsWith('upload:'))) ? 'folder' : 'upload',
+    source: (I.path||'').startsWith('gdrive:') ? 'drive' : (I.path && !I.path.startsWith('upload:')) ? 'folder' : 'upload',
     kind:I.map.kind||null, cardName:I.cardName||'', importedAt:new Date().toISOString(), count:out.length, from:ds[0]||null, to:ds[ds.length-1]||null, map};
   Store.saveSettings();
   IDB.set('rows:'+fid, {name:I.name, rows:I.rows, sheets:I.rows.sheets||1});
@@ -1698,13 +1714,37 @@ function commitImport(out, fills=[]){
   return uncat;
 }
 const sigOf = row => (row||[]).map(c=>norm(c)).filter(Boolean).join('|');
-function saveProfile(){
+function saveProfile(cardsSeen){
   const I=S.imp, sig=sigOf(I.rows[I.map.hi]); if(!sig) return;
   const {headers, ...map} = I.map;
-  (S.settings.importProfiles ||= {})[sig]={map, cardName:I.cardName||''}; Store.saveSettings();
+  (S.settings.importProfiles ||= {})[sig]={map, cardName:I.cardName||''};
+  // per card: keep the column NAMES so the settings fit the next file of that card even if columns move
+  const names={}; MAP_KEYS.forEach(k=>{ if(map[k]>-1 && headers[map[k]]) names[k]=headers[map[k]]; });
+  const prof={names, mode:map.mode, kind:map.kind, amtIsTotal:!!map.amtIsTotal, skipCardCharges:map.skipCardCharges, cardName:I.cardName||'', updated:new Date().toISOString()};
+  const keys=new Set([...(cardsSeen||[]), I.cardName].filter(Boolean).map(normCardKey).filter(Boolean));
+  if (keys.size){ S.settings.cardProfiles ||= {}; keys.forEach(k=>S.settings.cardProfiles[k]=prof); }
+  Store.saveSettings();
+  if (ACTIVE===GD) GD.saveImportSettings();
 }
-function findProfile(rows){
+const normCardKey = s => { const d=String(s||'').match(/\d{4}(?!.*\d{4})/); return d ? d[0] : norm(s); };
+function cardHint(rows, name){
+  const fromName=cardFromName(name); if (fromName) return fromName;
+  for (let i=0;i<Math.min(rows.length,12);i++){ const t=rows[i].map(c=>String(c??'')).join(' '); const m=t.match(/(?:כרטיס|card|המסתיים ב|מסתיים ב)[^\d]{0,25}(\d{4})(?!\d)/i); if(m) return 'כרטיס '+m[1]; }
+  return '';
+}
+function findProfile(rows, name){
   const P=S.settings.importProfiles||{};
+  const ch=cardHint(rows, name), CP=S.settings.cardProfiles||{}, cp=ch && CP[normCardKey(ch)];
+  if (cp && cp.names && cp.names.date){
+    for (let i=0;i<Math.min(rows.length,25);i++){
+      const hd=rows[i].map(c=>String(c??'').trim());
+      if (!hd.includes(cp.names.date) || (cp.names.desc && !hd.includes(cp.names.desc))) continue;
+      const map=guessMap(rows,i);
+      MAP_KEYS.forEach(k=>{ map[k] = cp.names[k] ? hd.indexOf(cp.names[k]) : -1; });
+      Object.assign(map,{mode:cp.mode, kind:cp.kind, amtIsTotal:cp.amtIsTotal, skipCardCharges:cp.skipCardCharges, fromCard:ch});
+      return {map, cardName:cp.cardName||ch, sig:null};
+    }
+  }
   for (let i=0;i<Math.min(rows.length,25);i++){ const sig=sigOf(rows[i]); if(sig && P[sig]){ const map={...P[sig].map, hi:i, headers:rows[i].map(c=>String(c).trim())}; if(!map.kind) map.kind = map.mode==='posExpense'?'credit':'bank'; if(map.branchCol===undefined) map.branchCol=detectBranchCol(map.headers); return {map, cardName:P[sig].cardName, sig}; } }
   return null;
 }
@@ -1818,9 +1858,14 @@ const GD = {
       const tf=await this.list(this.txId);
       await Promise.all(tf.map(async f=>{ const m=f.name.match(/^(\d{4}-\d{2})\.json$/); if(!m) return; const d=await read('transactions/'+f.name,f); if(d && Array.isArray(d.items) && d.items.length) months[m[1]]=d.items; }));
     }
-    if (!cd && !sd && !Object.keys(months).length) return null;
-    return {settings:{...(sd||{}), categories:cd&&Array.isArray(cd.categories)?cd.categories:null, learned:(cd&&cd.learned)||{}}, months};
+    let isd=null;
+    if (this.dataId){ try{ const df=(await this.list(this.dataId)).find(f=>f.name==='import_settings.json'); if(df) isd=await read('data/import_settings.json',df); }catch(e){} }
+    if (!cd && !sd && !Object.keys(months).length && !isd) return null;
+    const st={...(sd||{}), categories:cd&&Array.isArray(cd.categories)?cd.categories:null, learned:(cd&&cd.learned)||{}};
+    if (isd){ st.cardProfiles={...(st.cardProfiles||{}), ...(isd.cardProfiles||{})}; st.importProfiles={...(st.importProfiles||{}), ...(isd.importProfiles||{})}; st.branchMap={...(st.branchMap||{}), ...(isd.branchMap||{})}; }
+    return {settings:st, months};
   },
+  saveImportSettings(){ if(this.dataId) this.queue('data/import_settings.json',()=>({updated:new Date().toISOString(), note:'הגדרות טעינת קבצים לפי כרטיס', cardProfiles:S.settings.cardProfiles||{}, importProfiles:S.settings.importProfiles||{}, branchMap:S.settings.branchMap||{}})); },
   queue(path, getObj){
     if (!this.canEdit){ if(!this.warned){ this.warned=true; toast('יש לך הרשאת צפייה בלבד בתיקייה בדרייב, ולכן שינויים לא יישמרו שם.'); } return; }
     if (!this.timers[path]) this.busy++;
@@ -1836,7 +1881,7 @@ const GD = {
       const body=JSON.stringify(obj,null,1), id=this.ids[path]; let r;
       if (id) r=await this.api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&supportsAllDrives=true&fields=id,modifiedTime`,{method:'PATCH',headers:{'Content-Type':'application/json'},body});
       else {
-        const parent=path.startsWith('transactions/')?this.txId:this.projId, bd='mmb'+Date.now();
+        const parent=path.startsWith('transactions/')?this.txId:path.startsWith('data/')?this.dataId:this.projId, bd='mmb'+Date.now();
         const mp=`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({name:path.split('/').pop(), parents:[parent], mimeType:'application/json'})}\r\n--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${body}\r\n--${bd}--`;
         r=await this.api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,modifiedTime',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+bd},body:mp});
         this.ids[path]=r.id;
@@ -1844,21 +1889,28 @@ const GD = {
       this.mod[path]=r.modifiedTime; this.failed.delete(path);
     }catch(e){
       if (e.message==='expired'){ this.failed.add(path); return; }
-      const rate = e.status===429 || e.status>=500 || /rateLimit|userRateLimit|backendError/i.test(e.reason||'');
+      const net = !e.status;
+      const rate = net || e.status===429 || e.status>=500 || /rateLimit|userRateLimit|backendError/i.test(e.reason||'');
       if (e.status===404 && this.ids[path] && attempt<1){ delete this.ids[path]; return this.writeNow(path,obj,attempt+1); }
       if (rate && attempt<4){ await new Promise(r=>setTimeout(r,(2**attempt)*1000+Math.random()*500)); return this.writeNow(path,obj,attempt+1); }
       this.failed.add(path);
       this.reportFail(e);
     }
   },
-  reportFail(e){
+  async reportFail(e){
     const now=Date.now(); if (this._lastFail && now-this._lastFail<4000) return; this._lastFail=now;
+    if (!e.status){
+      // no HTTP answer at all: find out whether Google is reachable but uploads are blocked
+      let apiOk=false; try{ await this.api('about?fields=user(emailAddress)'); apiOk=true; }catch(x){}
+      toast(apiOk ? 'החיבור ל-Google עובד, אבל שליחת הנתונים לשרת השמירה של Google (www.googleapis.com/upload) נחסמת. בדרך כלל זה סינון אינטרנט (כמו נטפרי או רימון) או תוסף בדפדפן שחוסם העלאות. נסו מרשת סלולרית; אם שם זה עובד, בקשו מספק הסינון לאשר את הכתובת.' : `אין חיבור לשרתי Google (${e.message||'שגיאת רשת'}). בדקו את החיבור לאינטרנט.`, [{label:'לנסות שוב',fn:()=>this.retryFailed()}]);
+      return;
+    }
     const r=e.reason||'', d=e.detail||'';
     let msg;
     if (/insufficientPermissions|SCOPE_INSUFFICIENT|insufficient/i.test(r+d)) msg='לא אושרה הרשאת עריכה לדרייב בזמן ההתחברות. התנתקו, התחברו שוב, ובחלון של Google סמנו את תיבת ההרשאה לדרייב.';
     else if (/storageQuota/i.test(r)) msg='אין מספיק מקום פנוי ב-Google Drive.';
     else if (/forbidden|cannotAddParent|teamDrive|appNotAuthorized/i.test(r) || e.status===403) msg=`Google חסמה את השמירה (${r||e.status}). ודאו שיש לחשבון הרשאת "עורך" לתיקייה.`;
-    else msg=`השמירה ל-Google Drive נכשלה (${e.status||''} ${r}${d?': '+d.slice(0,120):''}).`;
+    else msg=`השמירה ל-Google Drive נכשלה (${[e.status,r].filter(Boolean).join(' ')}${d?': '+d.slice(0,120):''}).`;
     toast(msg,[{label:'לנסות שוב',fn:()=>this.retryFailed()}]);
   },
   retryFailed(){ const f=[...(this.failed||[])]; this.failed=new Set(); f.forEach(p=>{ const g=this.getters&&this.getters[p]; if(g) this.queue(p,g); }); if(!f.length) toast('אין שמירות שממתינות'); },
@@ -1904,10 +1956,21 @@ async function driveConnect(){
   }catch(e){ document.getElementById('projBanner').innerHTML=''; toast(driveErr(e)); }
 }
 async function driveReauth(){ try{ await GD.signIn(); updateStatus(); if(GD.canEdit){ GD.retryFailed(); GD.saveAll(); } render(); toast('מחובר מחדש. הנתונים נשמרו בדרייב.'); }catch(e){ toast(driveErr(e)); } }
-function driveDisconnect(){
+async function driveDisconnect(){
+  // let pending saves finish first, so nothing is lost in Drive
+  if (GD.busy && GD.token){ toast('שומר את השינויים האחרונים…'); const t0=Date.now(); while(GD.busy && Date.now()-t0<8000) await new Promise(r=>setTimeout(r,250)); }
   try{ if (GD.token && window.google) google.accounts.oauth2.revoke(GD.token,()=>{}); }catch(e){}
-  GD.token=null; ACTIVE = PROJ.dir ? PROJ : null; try{ localStorage.removeItem('mm-gused'); }catch(e){}
-  updateStatus(); render(); toast('נותקת מ-Google Drive. פרטי ההתחברות לא נשמרו בשום מקום.');
+  GD.token=null; GD.user=null; GD.ids={}; GD.mod={}; GD.failed=new Set();
+  ACTIVE=null; try{ localStorage.removeItem('mm-gused'); }catch(e){}
+  clearScreenData();
+  updateStatus(); render(); toast('נותקת מ-Google Drive. הנתונים הוסרו מהמסך ומהדפדפן, והם נשארים שמורים בדרייב.');
+}
+function clearScreenData(){
+  // only the local copy: files in Drive / project_data are not touched
+  S.months={}; S.settings=normalizeSettings(null); S.imp=null; S.queue=[]; S.batch=null; S.range=null; S.month=todayISO().slice(0,7);
+  try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  IDB.clearPrefix('rows:');
+  document.querySelectorAll('dialog[open]').forEach(d=>d.close());
 }
 let driveChecking=false;
 async function checkDrive(){
@@ -1959,7 +2022,7 @@ function driveDataPanelHTML(){
   const n=Object.keys(S.settings.importedFiles||{}).length;
   return `<div class="panel"><h2>תיקיית data ב-Google Drive</h2>
     <p class="muted" style="margin-top:0">העלו את קובצי הבנק והאשראי לתיקייה <strong>data</strong> שבתיקיית הפרויקט בדרייב (גם Google Sheets נתמכים). המערכת בודקת אותה בכל התחברות וקולטת רק קבצים חדשים.</p>
-    <button class="btn primary" id="gdScan" ${GD.token&&GD.canEdit?'':'disabled'}>בדיקת קבצים חדשים בדרייב</button>
+    <button class="btn primary" id="gdScan" ${GD.token&&GD.canEdit?'':'disabled'}>בחירת קבצים מהדרייב</button>
     ${n?`<p class="muted" style="font-size:.85rem;margin:12px 0 0">${n} קבצים נקלטו עד היום <button class="btn ghost small" id="dirReset">איפוס רשימת הקבצים</button></p>`:''}</div>`;
 }
 function bindDrivePanel(){
@@ -2062,7 +2125,8 @@ function bindProjPanel(){
 const IDB={ p:null,
   open(){ return this.p ||= new Promise((res,rej)=>{ const r=indexedDB.open('money-manager',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); },
   async run(mode,fn){ try{ const db=await this.open(); return await new Promise((res,rej)=>{ const tx=db.transaction('kv',mode); const q=fn(tx.objectStore('kv')); tx.oncomplete=()=>res(q&&q.result); tx.onerror=()=>rej(tx.error); }); }catch(e){ return null; } },
-  get(k){ return this.run('readonly',s=>s.get(k)); }, set(k,v){ return this.run('readwrite',s=>s.put(v,k)); }, del(k){ return this.run('readwrite',s=>s.delete(k)); }
+  get(k){ return this.run('readonly',s=>s.get(k)); }, set(k,v){ return this.run('readwrite',s=>s.put(v,k)); }, del(k){ return this.run('readwrite',s=>s.delete(k)); },
+  clearPrefix(pre){ return this.run('readwrite',s=>{ const q=s.openCursor(); q.onsuccess=()=>{ const c=q.result; if(!c) return; if(String(c.key).startsWith(pre)) c.delete(); c.continue(); }; return q; }); }
 };
 async function collectDir(handle, prefix='', depth=0, out=[]){
   for await (const [name,hd] of handle.entries()){
@@ -2084,23 +2148,82 @@ async function scanFolder(interactive){
 }
 async function queueFiles(items, interactive){
   const done=S.settings.importedFiles||{};
-  const fresh=items.filter(it=>!done[fileKey(it.path,it.file)]).sort((a,b)=>a.file.lastModified-b.file.lastModified);
+  const fresh=items.filter(it=>!done[fileKey(it.path,it.file)]);
   S.settings.lastScan=new Date().toISOString(); Store.saveSettings();
-  if (!fresh.length){ if(interactive) toast('אין קבצים חדשים בתיקייה.'); if(S.tab==='import' && !S.imp) renderImport(); return; }
-  S.queue=fresh; S.batch={files:0, tx:0, uncat:0, months:new Set()};
-  await processQueue(interactive);
+  if (!interactive){
+    if (fresh.length) toast(`נמצאו ${fresh.length} קבצים חדשים לטעינה.`,[{label:'לבחירה וטעינה',fn:()=>openPicker(items)}]);
+    return;
+  }
+  if (!items.length){ toast('לא נמצאו קובצי Excel או CSV.'); return; }
+  openPicker(items);
+}
+function openPicker(items){
+  const done=S.settings.importedFiles||{}, files=S.settings.files||{};
+  S.pick={items:items.map(it=>{ const key=fileKey(it.path,it.file), v=done[key]; const fid=(typeof v==='string' && files[v]) ? v : null;
+      return {...it, key, imported:!!v, fid, when: fid ? files[fid].importedAt : (typeof v==='number' ? new Date(v).toISOString() : null), sel:!v}; })
+    .sort((a,b)=>(a.file.lastModified||0)-(b.file.lastModified||0))};
+  S.imp=null; S.tab='import'; render(); window.scrollTo({top:0});
+}
+function renderPicker(){
+  const P=S.pick, sel=P.items.filter(x=>x.sel), nNew=P.items.filter(x=>!x.imported).length;
+  const kb=s=>s? (s>1048576? (s/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(s/1024))+' KB') : '—';
+  app.innerHTML=`<div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><h2 style="margin:0">בחירת קבצים לטעינה</h2><button class="btn ghost small" id="pkCancel">ביטול</button></div>
+    <p class="muted" style="margin:6px 0 12px">נמצאו ${P.items.length} קבצים, מתוכם ${nNew} חדשים. סמנו את הקבצים שרוצים לטעון וסדרו אותם בסדר הרצוי, בגרירה או בחצים. הקבצים ייטענו אחד אחרי השני לפי הסדר.</p>
+    <div class="filters" style="margin-bottom:10px">
+      <button class="btn small" id="pkNew">סימון כל החדשים</button><button class="btn small" id="pkAll">סימון הכול</button><button class="btn ghost small" id="pkNone">ניקוי הסימון</button>
+      <span class="muted" style="font-size:.85rem;margin-inline-start:8px">מיון:</span><button class="btn ghost small" id="pkSortDate">לפי תאריך הקובץ</button><button class="btn ghost small" id="pkSortName">לפי שם</button>
+    </div>
+    <div class="table-wrap" style="box-shadow:none;border:1px solid var(--line)"><table>
+      <thead><tr><th style="width:36px"></th><th style="width:44px">סדר</th><th>קובץ</th><th>תאריך הקובץ</th><th>גודל</th><th>מצב</th><th style="width:90px"></th></tr></thead>
+      <tbody>${P.items.map((x,i)=>`<tr data-pi="${i}" draggable="true" style="cursor:grab${x.sel?'':';opacity:.6'}">
+        <td><input type="checkbox" data-psel ${x.sel?'checked':''} aria-label="לטעון את ${esc(x.file.displayName||x.file.name)}"></td>
+        <td><strong>${x.sel? sel.indexOf(x)+1 : ''}</strong></td>
+        <td><strong>📄 ${esc(x.file.displayName||x.file.name)}</strong>${x.path.includes('/')?`<div class="muted" style="font-size:.8rem">${esc(x.path.split('/').slice(0,-1).join('/'))}</div>`:''}</td>
+        <td class="card-tag">${x.file.lastModified? new Date(x.file.lastModified).toLocaleDateString('he-IL') : '—'}</td>
+        <td class="card-tag">${kb(x.file.size)}</td>
+        <td>${x.imported?`<span class="badge">נקלט${x.when?' ב-'+new Date(x.when).toLocaleDateString('he-IL'):''}</span>`:'<span class="badge b-inc">חדש</span>'}</td>
+        <td style="white-space:nowrap"><button class="icon-btn" data-pup aria-label="למעלה" ${i?'':'disabled'}>▲</button><button class="icon-btn" data-pdown aria-label="למטה" ${i<P.items.length-1?'':'disabled'}>▼</button></td></tr>`).join('')}</tbody></table></div>
+    ${sel.some(x=>x.imported)?`<p class="muted" style="font-size:.88rem;margin:10px 0 0">🔁 קבצים שכבר נקלטו ייטענו מחדש: התנועות הקודמות שלהם יוחלפו, וסיווגים והחרגות שעשיתם יישמרו לתנועות שלא השתנו.</p>`:''}
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="pkGo" ${sel.length?'':'disabled'}>${sel.length?`טעינת ${sel.length} קבצים לפי הסדר`:'בחרו קבצים לטעינה'}</button></div>
+  </div>`;
+  const re=()=>renderPicker();
+  app.querySelector('#pkCancel').onclick=()=>{ S.pick=null; render(); };
+  app.querySelector('#pkNew').onclick=()=>{ P.items.forEach(x=>x.sel=!x.imported); re(); };
+  app.querySelector('#pkAll').onclick=()=>{ P.items.forEach(x=>x.sel=true); re(); };
+  app.querySelector('#pkNone').onclick=()=>{ P.items.forEach(x=>x.sel=false); re(); };
+  app.querySelector('#pkSortDate').onclick=()=>{ P.items.sort((a,b)=>(a.file.lastModified||0)-(b.file.lastModified||0)); re(); };
+  app.querySelector('#pkSortName').onclick=()=>{ P.items.sort((a,b)=>String(a.file.displayName||a.file.name).localeCompare(String(b.file.displayName||b.file.name),'he',{numeric:true})); re(); };
+  const move=(from,to)=>{ if(to<0||to>=P.items.length||from===to) return; const [x]=P.items.splice(from,1); P.items.splice(to,0,x); re(); };
+  let dragFrom=null;
+  app.querySelectorAll('tr[data-pi]').forEach(tr=>{
+    const i=+tr.dataset.pi;
+    tr.querySelector('[data-psel]').onchange=e=>{ P.items[i].sel=e.target.checked; re(); };
+    tr.querySelector('[data-pup]').onclick=()=>move(i,i-1);
+    tr.querySelector('[data-pdown]').onclick=()=>move(i,i+1);
+    tr.addEventListener('dragstart',e=>{ dragFrom=i; e.dataTransfer.effectAllowed='move'; tr.style.opacity='.4'; });
+    tr.addEventListener('dragend',()=>{ tr.style.opacity=''; });
+    tr.addEventListener('dragover',e=>{ e.preventDefault(); tr.style.boxShadow='inset 0 3px 0 var(--accent)'; });
+    tr.addEventListener('dragleave',()=>{ tr.style.boxShadow=''; });
+    tr.addEventListener('drop',e=>{ e.preventDefault(); tr.style.boxShadow=''; if(dragFrom!==null) move(dragFrom,i); dragFrom=null; });
+  });
+  app.querySelector('#pkGo').onclick=()=>{
+    S.queue=P.items.filter(x=>x.sel).map(x=>({path:x.path, file:x.file, replaceFid:x.fid}));
+    S.pick=null; S.batch={files:0, tx:0, uncat:0, months:new Set()};
+    processQueue(true);
+  };
 }
 async function processQueue(interactive){
   while (S.queue.length){
     const it=S.queue.shift(); let rows;
     try{ rows=await readFile(it.file); }catch(e){ markFile(it); continue; }
     if (rows.length<2){ markFile(it); continue; }
-    const prof=findProfile(rows), fcard=cardFromName(it.file.name);
+    const prof=findProfile(rows, it.file.displayName||it.file.name), fcard=cardHint(rows, it.file.displayName||it.file.name);
     if (prof){
-      S.imp={name:it.file.displayName||it.file.name, path:it.path, mime:it.file.mime||null, rows, map:prof.map, cardName:fcard||prof.cardName||'', item:it};
+      S.imp={name:it.file.displayName||it.file.name, path:it.path, mime:it.file.mime||null, rows, map:prof.map, cardName:fcard||prof.cardName||'', item:it, replaceFileId:it.replaceFid||null};
       const b=buildImport(); commitImport(b.out,b.fills); markFile(it); continue;
     }
-    S.imp={name:it.file.displayName||it.file.name, path:it.path, mime:it.file.mime||null, rows, map:autoKind(guessMap(rows), it.file.displayName||it.file.name), cardName:fcard, item:it};
+    S.imp={name:it.file.displayName||it.file.name, path:it.path, mime:it.file.mime||null, rows, map:autoKind(guessMap(rows), it.file.displayName||it.file.name), cardName:fcard, item:it, replaceFileId:it.replaceFid||null};
     if (interactive || S.tab==='import'){ S.tab='import'; render(); }
     else toast(`בתיקייה יש קובץ חדש בפורמט שעוד לא הוגדר: ${it.file.name}`,[{label:'להגדרה',fn:()=>{ S.tab='import'; render(); }}]);
     return;
@@ -2122,7 +2245,7 @@ function folderPanelHTML(){
   const foot=(n||last)?`<p class="muted" style="font-size:.85rem;margin:12px 0 0">${n} קבצים נקלטו עד היום${last?` · בדיקה אחרונה ${last}`:''} ${n?'<button class="btn ghost small" id="dirReset">איפוס רשימת הקבצים</button>':''}</p>`:'';
   if (FS_API) return `<div class="panel"><h2>תיקייה קבועה</h2>
     ${dirHandle?`<p style="margin-top:0">מקושרת לתיקייה <strong>${esc(dirHandle.name)}</strong>. בכל פתיחה המערכת בודקת אם נוספו בה קבצים וקולטת רק את החדשים.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="dirScan">בדיקת קבצים חדשים</button><button class="btn" id="dirPick">החלפת תיקייה</button><button class="btn ghost" id="dirUnlink">ניתוק התיקייה</button></div>`
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="dirScan">בחירת קבצים מהתיקייה</button><button class="btn" id="dirPick">החלפת תיקייה</button><button class="btn ghost" id="dirUnlink">ניתוק התיקייה</button></div>`
     :`<p class="muted" style="margin-top:0">שמרו את כל קובצי הבנק והאשראי בתיקייה אחת במחשב וקשרו אותה כאן. בכל פתיחה המערכת תבדוק אם נוספו קבצים ותקלוט רק את החדשים, בלי להעלות שום דבר ידנית.</p>
       <button class="btn primary" id="dirPick">קישור תיקייה</button>`}${foot}</div>`;
   return `<div class="panel"><h2>קליטה מתיקייה</h2>
@@ -2310,7 +2433,7 @@ function renderSave(){
       const committed=plans().reduce((a,p)=>{ const s=planAt(p,refMonth()); return a+(s.left>0?p.amount:0); },0);
       return committed?`<div class="panel"><h2>תשלומים פתוחים</h2>
         <p style="margin-top:0">בחודש הבא כבר מחויבים <strong>${fmt(nextLoad())}</strong> על עסקאות בתשלומים${incAvg?`, ${Math.round(nextLoad()/incAvg*100)}% מההכנסה החודשית`:''}. לפני עסקה חדשה בתשלומים, בדקו כמה היא מוסיפה לסכום הזה.</p>
-        ${ending.length?`<ul class="sav-list">${ending.map(x=>`<li><span>${esc(x.p.desc)}</span><span class="amt" style="color:var(--inc)">${fmt(x.p.amount)} יתפנו</span><span class="tip">התשלום האחרון ב${monthLabel(x.p.end)}. כדאי להעביר את הסכום שמתפנה לחיסכון במקום לעסקה חדשה.</span></li>`).join('')}</ul>`:''}</div>`:''; })()}
+        ${ending.length?`<ul class="sav-list">${ending.map(x=>`<li><span>${esc(x.p.desc)}</span><span class="amt" style="color:var(--inc)">${fmt(x.p.amount)} יתפנו</span><span class="tip">החיוב האחרון ב-${fmtD(x.p.endDate)}. כדאי להעביר את הסכום שמתפנה לחיסכון במקום לעסקה חדשה.</span></li>`).join('')}</ul>`:''}</div>`:''; })()}
   </div>
   <div class="panel" style="margin-top:18px" id="aiPanel" hidden>
     <h2>תוכנית חיסכון אישית מ-Claude</h2>
