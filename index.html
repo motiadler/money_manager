@@ -537,7 +537,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.1';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.2';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -1505,7 +1505,7 @@ async function reimportFile(fid){
   try{
     if (meta.source==='drive' && GD.token){ const id=meta.path.slice(7); rows=await readFile({name:isSheet(meta.name)?meta.name:meta.name+'.xlsx', arrayBuffer:()=>GD.download({id, mimeType:meta.mime})}); }
   }catch(e){ rows=null; }
-  if (!rows){ const c=await IDB.get('rows:'+fid); if(c && c.rows){ rows=c.rows; rows.sheets=c.sheets||1; } }
+  if (!rows){ const c=await rowsGet(fid); if(c && c.rows){ rows=c.rows; rows.sheets=c.sheets||1; } }
   if (!rows && meta.source==='folder' && dirHandle){
     try{ let d=dirHandle; const parts=meta.path.split('/'); const name=parts.pop(); for(const p of parts) d=await d.getDirectoryHandle(p); rows=await readFile(await (await d.getFileHandle(name)).getFile()); }catch(e){ rows=null; }
   }
@@ -2013,7 +2013,7 @@ function commitImport(out, fills=[]){
     source: (I.path||'').startsWith('gdrive:') ? 'drive' : (I.path && !I.path.startsWith('upload:')) ? 'folder' : 'upload',
     kind:I.map.kind||null, cardName:I.cardName||'', cardManual:!!I.cardManual, chargeDate:(I.map.kind==='credit' && (I.map.chargeCol??-1)<0 && I.fileCharge) ? I.fileCharge : null, importedAt:new Date().toISOString(), count:out.length, from:ds[0]||null, to:ds[ds.length-1]||null, map, names};
   Store.saveSettings();
-  IDB.set('rows:'+fid, {name:I.name, rows:I.rows, sheets:I.rows.sheets||1});
+  rowsPut(fid, {name:I.name, rows:I.rows, sheets:I.rows.sheets||1});
   S.lastFid=fid;
   const uncat=out.filter(t=>t.catId==='uncat').length;
   if (S.batch){ S.batch.files++; S.batch.tx+=out.length; S.batch.uncat+=uncat; out.forEach(t=>S.batch.months.add(t.date.slice(0,7))); }
@@ -2218,6 +2218,7 @@ async function createVault(pin){
   VAULT.meta={v:1, created:new Date().toISOString(), autoLock:5, pin:{salt, iv:w.iv, wk:w.wk}, bio:null, data:null, fails:0};
   await openWithRaw(raw); await VAULT.save();
   try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  await encryptRowCaches();
   try{ if(navigator.storage && navigator.storage.persist) await navigator.storage.persist(); }catch(e){}
 }
 async function addBio(){
@@ -2235,6 +2236,21 @@ function bioErr(e){
   if (n==='NotAllowedError') return 'הזיהוי בוטל או לא הצליח.';
   if (n==='SecurityError') return 'Face ID זמין רק כשהמערכת פתוחה מכתובת https (כמו האתר ב-GitHub Pages).';
   return 'הזיהוי הביומטרי נכשל ('+n+').';
+}
+// the original rows of each loaded file (for "load again"): encrypted with the same key when the lock is on
+async function rowsPut(fid, obj){
+  if (VAULT.unlocked()){ const iv=crypto.getRandomValues(new Uint8Array(12)); const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},VAULT.dek,te.encode(JSON.stringify(obj))); return IDB.set('rows:'+fid,{enc:true,iv,ct}); }
+  if (VAULT.meta) return;            // locked: never write plain data
+  return IDB.set('rows:'+fid,obj);
+}
+async function rowsGet(fid){
+  const c=await IDB.get('rows:'+fid); if(!c) return null;
+  if (c.enc){ if(!VAULT.unlocked()) return null; try{ return JSON.parse(td.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:c.iv},VAULT.dek,c.ct))); }catch(e){ return null; } }
+  return c;
+}
+async function encryptRowCaches(){
+  if (!VAULT.unlocked()) return;
+  for (const k of await IDB.keys('rows:')){ const c=await IDB.get(k); if(c && !c.enc) await rowsPut(k.slice(5), c); }
 }
 async function lockNow(){
   if (!VAULT.meta) return;
@@ -2321,7 +2337,7 @@ function bindSecurity(){
   q('#vChange')?.addEventListener('click',async()=>{ const v=q('#vNew').value; if(v.length<4){ toast('הקוד צריך להיות לפחות 4 תווים'); return; } await changePin(v); q('#vNew').value=''; toast('הקוד שונה'); });
   const off=q('#vOff'); off?.addEventListener('click',async()=>{
     if (!off.dataset.sure){ off.dataset.sure='1'; off.textContent='לבטל את ההצפנה? לחצו שוב'; return; }
-    await VAULT.flush(); VAULT.meta=null; VAULT.dek=null; VAULT.raw=null; await IDB.del('vault'); Store.saveLocal(); updateLockBtn(); render(); toast('ההצפנה בוטלה');
+    await VAULT.flush(); await IDB.clearPrefix('rows:'); VAULT.meta=null; VAULT.dek=null; VAULT.raw=null; await IDB.del('vault'); Store.saveLocal(); updateLockBtn(); render(); toast('ההצפנה בוטלה');
   });
 }
 function updateLockBtn(){ const b=document.getElementById('lockBtn'); if(b) b.hidden=!VAULT.unlocked();  }
@@ -2480,7 +2496,7 @@ const GD = {
     else msg=`השמירה ל-Google Drive נכשלה (${[e.status,r].filter(Boolean).join(' ')}${d?': '+d.slice(0,120):''}).`;
     toast(msg,[{label:'לנסות שוב',fn:()=>this.retryFailed()}]);
   },
-  retryFailed(){ const f=[...(this.failed||[])]; this.failed=new Set(); f.forEach(p=>{ const g=this.getters&&this.getters[p]; if(g) this.queue(p,g); }); if(!f.length) toast('אין שמירות שממתינות'); },
+  retryFailed(){ const f=[...(this.failed||[])]; this.failed=new Set(); f.forEach(p=>{ const g=this.getters&&this.getters[p]; if(g) this.queue(p,g); }); },
   saveSettings(){
     this.queue('categories.json',()=>({updated:new Date().toISOString(), categories:S.settings.categories, learned:S.settings.learned||{}}));
     this.queue('settings.json',()=>{ const {categories,learned,...rest}=S.settings; return rest; });
@@ -2713,6 +2729,7 @@ const IDB={ p:null,
   open(){ return this.p ||= new Promise((res,rej)=>{ const r=indexedDB.open('money-manager',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); },
   async run(mode,fn){ try{ const db=await this.open(); return await new Promise((res,rej)=>{ const tx=db.transaction('kv',mode); const q=fn(tx.objectStore('kv')); tx.oncomplete=()=>res(q&&q.result); tx.onerror=()=>rej(tx.error); }); }catch(e){ return null; } },
   get(k){ return this.run('readonly',s=>s.get(k)); }, set(k,v){ return this.run('readwrite',s=>s.put(v,k)); }, del(k){ return this.run('readwrite',s=>s.delete(k)); },
+  keys(pre){ return this.run('readonly',s=>s.getAllKeys()).then(a=>(a||[]).filter(k=>String(k).startsWith(pre))); },
   clearPrefix(pre){ return this.run('readwrite',s=>{ const q=s.openCursor(); q.onsuccess=()=>{ const c=q.result; if(!c) return; if(String(c.key).startsWith(pre)) c.delete(); c.continue(); }; return q; }); }
 };
 async function collectDir(handle, prefix='', depth=0, out=[]){
@@ -3147,6 +3164,17 @@ setTimeout(()=>checkUpdate(false), 4000);
 setInterval(()=>{ if(document.visibilityState==='visible') checkUpdate(false); }, 30*60000);
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkUpdate(false); });
 
+/* ================= offline ================= */
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && window.self===window.top){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+function netStatus(){
+  const el=document.getElementById('status'); if(!el) return;
+  if (!navigator.onLine){ el.dataset.off='1'; el.textContent='📴 אין חיבור לאינטרנט. הנתונים מוצגים מהמכשיר, ושינויים יישמרו בו ויסונכרנו כשהחיבור יחזור.'; }
+  else if (el.dataset.off){ delete el.dataset.off; updateStatus(); if (ACTIVE===GD && GD.token){ GD.retryFailed(); checkDrive(); } }
+}
+window.addEventListener('online',netStatus); window.addEventListener('offline',netStatus);
+
 /* ================= boot ================= */
 (async()=>{
   const data = await Store.init();
@@ -3157,12 +3185,13 @@ document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==
     data.settings=p.settings||data.settings; data.months=p.months||data.months||{};
     try{ if(p.gclient && !localStorage.getItem('mm-gclient')) localStorage.setItem('mm-gclient',p.gclient); if(p.gfolder && !localStorage.getItem('mm-gfolder')) localStorage.setItem('mm-gfolder',p.gfolder); }catch(e){}
     setTimeout(updateLockBtn,0);
+    encryptRowCaches();
   }
   S.settings = normalizeSettings(data.settings);
   S.months = data.months; migrateData(); fixCardsFromFileNames();
   const keys=monthKeys(); S.month = keys.length? keys[keys.length-1] : todayISO().slice(0,7);
   try{ const hp=new URLSearchParams(location.hash.slice(1)); if(hp.get('gclient')) localStorage.setItem('mm-gclient',hp.get('gclient')); if(hp.get('gfolder')) localStorage.setItem('mm-gfolder',parseFolderId(hp.get('gfolder'))); if(hp.get('gclient')||hp.get('gfolder')) history.replaceState(null,'',location.pathname+location.search); }catch(e){}
-  updateStatus();
+  updateStatus(); setTimeout(netStatus,0);
   if (!data.settings) Store.saveSettings();
   if (FS_API){
     const ph=await IDB.get('proj');
