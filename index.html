@@ -185,6 +185,7 @@ button.link-tag{cursor:pointer}
 .cat-item .cat-row .kw{grid-column:1/-1}
 .upd{display:flex;align-items:center;gap:10px;margin:10px 0 4px;padding:12px 14px;border-radius:18px;background:var(--surface);box-shadow:var(--shadow);border:2px solid var(--accent)}
 .upd-ico{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);font-size:1.1rem;flex:none}
+.by-tag{display:inline-block;font-size:.74rem;font-weight:600;color:var(--sand,#C3913B);background:var(--sand-soft,#F3E6C9);border-radius:999px;padding:1px 8px;margin-inline-start:6px;white-space:nowrap}
 .inst-tag{display:inline-block;font-size:.74rem;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;margin-inline-start:6px;white-space:nowrap}
 .prog{height:8px;background:var(--sunk);border-radius:999px;overflow:hidden;min-width:90px}.prog span{display:block;height:100%;background:var(--accent);border-radius:999px}
 .chk{display:flex;gap:8px;align-items:center;font-weight:500;cursor:pointer}
@@ -537,7 +538,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.2';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.3';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -646,7 +647,7 @@ const Store = {
         return out;
       }catch(e){ this.mode='local'; }
     }
-    try{ const raw = localStorage.getItem(LS_KEY); if(raw){ const v=JSON.parse(raw); out.settings=v.settings||null; out.months=v.months||{}; } }catch(e){}
+    try{ const raw = localStorage.getItem(LS_KEY); if(raw){ const v=JSON.parse(raw); out.settings=v.settings||null; out.months=v.months||{}; out.del=v.del||{}; } }catch(e){}
     return out;
   },
   write(docId, body){
@@ -663,7 +664,7 @@ const Store = {
     });
     this.chain[docId] = next; return next;
   },
-  saveLocal(){ if (VAULT.meta){ try{ localStorage.removeItem(LS_KEY); }catch(e){} if (VAULT.unlocked()) VAULT.queueSave(); return; } try{ localStorage.setItem(LS_KEY, JSON.stringify({settings:S.settings, months:S.months})); }catch(e){} },
+  saveLocal(){ if (VAULT.meta){ try{ localStorage.removeItem(LS_KEY); }catch(e){} if (VAULT.unlocked()) VAULT.queueSave(); return; } try{ localStorage.setItem(LS_KEY, JSON.stringify({settings:S.settings, months:S.months, del:S.del})); }catch(e){} },
   saveMonth(k){ const items = S.months[k]||[]; if (ACTIVE) ACTIVE.saveMonth(k); return this.write('m_'+k, items.length?{items}:null); },
   saveSettings(){ if (ACTIVE) ACTIVE.saveSettings(); return this.write('settings', S.settings); }
 };
@@ -814,13 +815,13 @@ function totals(list){
 /* ================= mutations ================= */
 function addTx(list){
   bump();
-  const touched = new Set();
-  for (const t of list){ const k=t.date.slice(0,7); (S.months[k] ||= []).push(t); touched.add(k); }
+  const touched = new Set(), now=Date.now(), who=me();
+  for (const t of list){ const k=t.date.slice(0,7); t.u=now; if(who.email){ t.by=who.name; t.byE=who.email; } if(S.del[k]) delete S.del[k][t.id]; (S.months[k] ||= []).push(t); touched.add(k); }
   touched.forEach(k=>{ S.months[k].sort((a,b)=>b.date.localeCompare(a.date)); Store.saveMonth(k); });
 }
 function removeTx(id){
   bump();
-  for (const k in S.months){ const i=S.months[k].findIndex(t=>t.id===id); if(i>-1){ const [t]=S.months[k].splice(i,1); Store.saveMonth(k); return t; } }
+  for (const k in S.months){ const i=S.months[k].findIndex(t=>t.id===id); if(i>-1){ const [t]=S.months[k].splice(i,1); (S.del[k] ||= {})[id]={u:Date.now(), by:me().name}; Store.saveMonth(k); return t; } }
 }
 function updateTx(id, patch){
   const old = removeTx(id); if(!old) return;
@@ -1062,7 +1063,7 @@ function renderTx(){
   const isUnlinked=t=> (isCardChargeRow(t) && !t.excluded && !I.linkOf[t.id]) || (I.hasBank && isCreditRow(t) && !t.excluded && !linkedChargeOf(t));
   let list = periodTx(basis).filter(t=>
     (!q || norm(t.desc).includes(q) || norm(t.note).includes(q)) &&
-    (!f.type || (f.type==='inst' ? !!t.inst : f.type==='excluded' ? !!t.excluded : f.type==='included' ? !t.excluded : f.type==='unlinked' ? isUnlinked(t) : f.type==='cardcharge' ? isCardChargeRow(t) : f.type==='nocard' ? (isCardChargeRow(t) && !chargeCardDigits(t)) : f.type==='refund' ? isRefund(t) : effKind(t)===f.type)) &&
+    (!f.type || (f.type==='inst' ? !!t.inst : f.type==='excluded' ? !!t.excluded : f.type==='included' ? !t.excluded : f.type==='unlinked' ? isUnlinked(t) : f.type==='cardcharge' ? isCardChargeRow(t) : f.type==='nocard' ? (isCardChargeRow(t) && !chargeCardDigits(t)) : f.type==='refund' ? isRefund(t) : f.type==='others' ? (!!t.byE && t.byE!==me().email && (t.u||0)>Date.now()-14*864e5) : effKind(t)===f.type)) &&
     (!f.nec || necOf(t)===f.nec) &&
     (!f.cat || t.catId===f.cat) &&
     (!f.card || (f.card==='__none' ? !t.card : t.card===f.card)) &&
@@ -1074,7 +1075,7 @@ function renderTx(){
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><span class="muted" style="font-size:.88rem">הצגה לפי:</span><div class="seg" role="group" aria-label="בסיס תאריכים"><button type="button" data-basis="charge" aria-pressed="${basis==='charge'}">מועד חיוב</button><button type="button" data-basis="deal" aria-pressed="${basis==='deal'}">מועד עסקה</button></div></div>
   <div class="filters">
     <input type="search" id="fq" placeholder="חיפוש לפי תיאור" value="${esc(f.q)}" aria-label="חיפוש">
-    <select id="ft" aria-label="סוג"><option value="">הכנסות והוצאות</option><option value="expense" ${f.type==='expense'?'selected':''}>הוצאות</option><option value="income" ${f.type==='income'?'selected':''}>הכנסות</option><option value="refund" ${f.type==='refund'?'selected':''}>זיכויים והחזרים</option><option value="inst" ${f.type==='inst'?'selected':''}>חיובים בתשלומים</option><option value="excluded" ${f.type==='excluded'?'selected':''}>לא נכללות בדוחות</option><option value="cardcharge" ${f.type==='cardcharge'?'selected':''}>חיובי כרטיס בבנק</option><option value="unlinked" ${f.type==='unlinked'?'selected':''}>⚠️ לא מקושרות</option><option value="nocard" ${f.type==='nocard'?'selected':''}>⚠️ חיובי כרטיס בלי מספר כרטיס</option></select>
+    <select id="ft" aria-label="סוג"><option value="">הכנסות והוצאות</option><option value="expense" ${f.type==='expense'?'selected':''}>הוצאות</option><option value="income" ${f.type==='income'?'selected':''}>הכנסות</option><option value="others" ${f.type==='others'?'selected':''}>👤 שינויים של בן/בת הזוג (14 יום)</option><option value="refund" ${f.type==='refund'?'selected':''}>זיכויים והחזרים</option><option value="inst" ${f.type==='inst'?'selected':''}>חיובים בתשלומים</option><option value="excluded" ${f.type==='excluded'?'selected':''}>לא נכללות בדוחות</option><option value="cardcharge" ${f.type==='cardcharge'?'selected':''}>חיובי כרטיס בבנק</option><option value="unlinked" ${f.type==='unlinked'?'selected':''}>⚠️ לא מקושרות</option><option value="nocard" ${f.type==='nocard'?'selected':''}>⚠️ חיובי כרטיס בלי מספר כרטיס</option></select>
     <select id="fn" aria-label="רמת הכרח"><option value="">כל רמות ההכרח</option>${Object.entries(NEC).map(([k,n])=>`<option value="${k}" ${f.nec===k?'selected':''}>${n.label}</option>`).join('')}</select>
     <select id="ftp" aria-label="נושא"><option value="">כל הנושאים</option>${topics.map(tp=>`<option ${f.topic===tp?'selected':''}>${esc(tp)}</option>`).join('')}</select>
     <select id="fc" aria-label="קטגוריה"><option value="">כל הקטגוריות</option>${catOptions('',f.cat)}</select>
@@ -1086,7 +1087,7 @@ function renderTx(){
     <thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th>הכרח</th><th>כרטיס</th><th style="text-align:center">בדוחות</th><th style="text-align:left">סכום</th><th><span class="sr" style="position:absolute;left:-9999px">פעולות</span></th></tr></thead>
     <tbody>${list.map(t=>`<tr data-id="${t.id}" class="${t.catId==='uncat'?'uncat':''} ${t.excluded?'is-excl':''}">
       <td class="td-date" style="white-space:nowrap">${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?`<div class="muted" style="font-size:.76rem">${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}</div>`:''; })()}</td>
-      <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${salaryShifted(t)?`<span class="inst-tag">נספרת ב${monthName(repMonth(t,'charge'))}</span>`:''}${linkTagHTML(t)}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
+      <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${(t.byE && t.byE!==me().email)?`<span class="by-tag" title="${esc(t.byE)}">👤 ${esc(t.by||t.byE)}</span>`:''}${salaryShifted(t)?`<span class="inst-tag">נספרת ב${monthName(repMonth(t,'charge'))}</span>`:''}${linkTagHTML(t)}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
       <td class="td-cat"><button class="cat-btn ${t.catId==='uncat'?'is-uncat':''}" data-cat>${esc(catById(t.catId).name)} ▾</button></td>
       <td class="td-meta"><span>${t.date.split('-').reverse().join('/')}</span>${t.card?`<span>💳 ${esc(cardName(t.card))}</span>`:''}<label class="chk" style="font-weight:400"><input type="checkbox" data-incl2 ${t.excluded?'':'checked'}> בדוחות</label></td>
       <td class="td-nec"><select data-nec aria-label="רמת הכרח" ${effKind(t)==='income'?'disabled':''} style="max-width:110px">
@@ -1232,7 +1233,8 @@ function openTx(t){
   document.getElementById('fIncl').checked=!t?.excluded;
   { const ex=document.getElementById('fExtra'), e=(t&&t.extra)||null, fl=t&&t.fileId&&S.settings.files&&S.settings.files[t.fileId];
     ex.hidden=!(e||fl||t?.branch);
-    ex.innerHTML = `<div style="background:var(--sunk);border-radius:12px;padding:10px 12px;font-size:.88rem"><strong style="display:block;margin-bottom:4px">פרטים מהקובץ</strong>${fl?`<div>קובץ: ${esc(fl.name)}</div>`:''}${t?.branch?`<div>ענף: ${esc(t.branch)}</div>`:''}${e?Object.entries(e).map(([k,v])=>`<div>${esc(k)}: ${esc(v)}</div>`).join(''):''}</div>`; }
+    ex.hidden = ex.hidden && !(t&&t.by);
+    ex.innerHTML = `<div style="background:var(--sunk);border-radius:12px;padding:10px 12px;font-size:.88rem">${t&&t.by?`<div style="margin-bottom:6px">👤 עודכן לאחרונה ע״י <strong>${esc(t.by)}</strong>${t.u?' · '+new Date(t.u).toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'}):''}</div>`:''}<strong style="display:block;margin-bottom:4px">פרטים מהקובץ</strong>${fl?`<div>קובץ: ${esc(fl.name)}</div>`:''}${t?.branch?`<div>ענף: ${esc(t.branch)}</div>`:''}${e?Object.entries(e).map(([k,v])=>`<div>${esc(k)}: ${esc(v)}</div>`).join(''):''}</div>`; }
   document.getElementById('fInstOn').checked=!!t?.inst; document.getElementById('fInstWrap').hidden=!t?.inst;
   document.getElementById('fInstN').value=t?.inst?.n||''; document.getElementById('fInstOf').value=t?.inst?.of||''; document.getElementById('fInstTotal').value=t?.inst?.total||'';
   const fc=document.getElementById('fCard'); fc.innerHTML=cardOptions(t?t.card:(S.settings.lastCard||''),{allowNew:true}); document.getElementById('fCardNew').value=''; document.getElementById('fCardNewWrap').hidden=true;
@@ -1433,7 +1435,7 @@ function buildImport(){
     const key=date+'|'+norm(desc)+'|'+amount.toFixed(2)+'|'+type+'|'+norm(cn);
     // allow genuine same-day repeats inside the file, but skip rows already stored
     const n=(seen.get(key)||0)+1; seen.set(key,n);
-    if (existing.has(key) && n===1){ dup++; const ex=existing.get(key); if(type==='expense' && !ex.inst && inst) fills.push({id:ex.id, inst}); continue; }
+    if (existing.has(key) && n===1){ dup++; const ex=existing.get(key); if(!ex.fileId) (I.adopt ||= new Set()).add(ex.id); if(type==='expense' && !ex.inst && inst) fills.push({id:ex.id, inst}); continue; }
     const branch = cm.branchCol>-1 ? normBranch(r[cm.branchCol]) : '';
     const catId = (I.overRow||{})[i] || (I.overDesc||{})[stripInst(desc)+'|'+type] || importCat(desc,type,branch,m.kind);
     if (isCardCharge) cardSkip++;
@@ -1463,7 +1465,7 @@ function analysisHTML(st, out){
 }
 function renderFilesList(){
   const files=Object.values(S.settings.files||{}).sort((a,b)=>b.importedAt.localeCompare(a.importedAt));
-  const legacy=allTx().filter(t=>t.source==='file' && !t.fileId).length;
+  const legacy=allTx().filter(t=>t.source==='file' && (!t.fileId || !(S.settings.files||{})[t.fileId])).length;
   if (!files.length && !legacy) return;
   const cnt={}; allTx().forEach(t=>{ if(t.fileId) cnt[t.fileId]=(cnt[t.fileId]||0)+1; });
   const srcL={drive:'Google Drive', folder:'תיקייה', upload:'העלאה'};
@@ -1479,8 +1481,14 @@ function renderFilesList(){
         <td>${cnt[f.id]||0}</td>
         <td class="card-tag">${new Date(f.importedAt).toLocaleDateString('he-IL')}</td>
         <td style="white-space:nowrap"><button class="btn small" data-freimp>קליטה מחדש</button> <button class="btn ghost small" data-fdel style="color:var(--exp)">מחיקה</button></td></tr>`).join('')}</tbody></table></div>`:''}
-    ${legacy?`<p class="muted" style="font-size:.86rem;margin:10px 0 0">${legacy} תנועות נקלטו לפני שהמערכת התחילה לשמור את רשימת הקבצים, ולכן הן לא משויכות לקובץ.</p>`:''}`;
+    ${legacy?`<p class="muted" style="font-size:.86rem;margin:10px 0 0">${legacy} תנועות מקבצים לא משויכות לאף קובץ ברשימה (נקלטו לפני שהמערכת שמרה את רשימת הקבצים, או שהקובץ שלהן נמחק). <button class="btn ghost small" id="orphDel" style="color:var(--exp)">מחיקת ${legacy} התנועות האלה</button></p>`:''}`;
   app.appendChild(box);
+  const od=box.querySelector('#orphDel');
+  if (od) od.onclick=()=>{
+    if (!od.dataset.sure){ od.dataset.sure='1'; od.textContent='למחוק אותן? לחצו שוב'; return; }
+    const ids=allTx().filter(t=>t.source==='file' && (!t.fileId || !(S.settings.files||{})[t.fileId])).map(t=>t.id); const removed=ids.map(id=>removeTx(id)).filter(Boolean);
+    render(); toast(`נמחקו ${removed.length} תנועות לא משויכות`,[{label:'ביטול',fn:()=>{ addTx(removed); render(); }}]);
+  };
   box.querySelectorAll('tr[data-fid]').forEach(tr=>{
     const f=S.settings.files[tr.dataset.fid];
     tr.querySelector('[data-freimp]').onclick=()=>reimportFile(f.id);
@@ -1493,11 +1501,11 @@ function renderFilesList(){
 }
 function deleteFile(fid){
   const meta=S.settings.files[fid]; const removed=removeByFile(fid);
-  delete S.settings.files[fid];
+  delete S.settings.files[fid]; markDeleted(fid);
   const keys=Object.keys(S.settings.importedFiles||{}).filter(k=>S.settings.importedFiles[k]===fid || (meta.key && k===meta.key));
   keys.forEach(k=>delete S.settings.importedFiles[k]);
   Store.saveSettings(); render();
-  toast(`הקובץ "${meta.name}" ו-${removed.length} התנועות שלו נמחקו`,[{label:'ביטול',fn:()=>{ S.settings.files[fid]=meta; keys.forEach(k=>S.settings.importedFiles[k]=fid); Store.saveSettings(); addTx(removed); render(); }}]);
+  toast(`הקובץ "${meta.name}" ו-${removed.length} התנועות שלו נמחקו`,[{label:'ביטול',fn:()=>{ S.settings.files[fid]=meta; if(S.settings.deletedIds) delete S.settings.deletedIds[fid]; keys.forEach(k=>S.settings.importedFiles[k]=fid); Store.saveSettings(); addTx(removed); render(); }}]);
 }
 async function reimportFile(fid){
   const meta=S.settings.files[fid]; if(!meta) return;
@@ -1992,7 +2000,8 @@ function renderInst(){
 function removeByFile(fid){
   bump();
   const removed=[], touched=new Set();
-  for (const k in S.months){ const before=S.months[k].length; S.months[k]=S.months[k].filter(t=>{ if(t.fileId===fid){ removed.push(t); return false; } return true; }); if(S.months[k].length!==before) touched.add(k); }
+  const now=Date.now(), by=me().name;
+  for (const k in S.months){ const before=S.months[k].length; S.months[k]=S.months[k].filter(t=>{ if(t.fileId===fid){ removed.push(t); (S.del[k] ||= {})[t.id]={u:now, by}; return false; } return true; }); if(S.months[k].length!==before) touched.add(k); }
   touched.forEach(k=>Store.saveMonth(k));
   return removed;
 }
@@ -2004,6 +2013,7 @@ function commitImport(out, fills=[]){
     out.forEach(t=>{ const o=idx.get(t.date+'|'+norm(t.desc)+'|'+t.type+'|'+t.amount.toFixed(2)); if(o){ t.catId=o.catId; t.excluded=!!o.excluded; if(o.note) t.note=o.note; if(o.nec) t.nec=o.nec; carried++; } });
   }
   out.forEach(t=>{ delete t._row; t.fileId=fid; });
+  if (I.adopt && I.adopt.size){ I.adopt.forEach(id=>updateTx(id,{fileId:fid})); I.adopt=null; }   // rows that already existed now belong to this file, so deleting the file removes them
   fills.forEach(f=>updateTx(f.id,{inst:f.inst}));
   const cmap={}; out.forEach(t=>{ const n=t.cardName; delete t.cardName; t.card = n ? (cmap[n] ||= ensureCard(n)) : null; });
   if (out.length) addTx(out);
@@ -2174,7 +2184,7 @@ const VAULT={ meta:null, dek:null, raw:null, timer:null, saving:null,
   unlocked(){ return !!(this.meta && this.dek); },
   async save(){
     if (!this.unlocked()) return;
-    const payload={v:1, settings:S.settings, months:S.months, gclient:GD.clientId(), gfolder:GD.folderId(), savedAt:new Date().toISOString()};
+    const payload={v:1, settings:S.settings, months:S.months, del:S.del, familyKey:FAMILY.raw?b32enc(FAMILY.raw):null, gclient:GD.clientId(), gfolder:GD.folderId(), savedAt:new Date().toISOString()};
     const iv=crypto.getRandomValues(new Uint8Array(12));
     const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv}, this.dek, te.encode(JSON.stringify(payload)));
     this.meta.data={iv, ct}; await IDB.set('vault', this.meta);
@@ -2348,12 +2358,12 @@ const PROJ = {
   async readJSON(dh, name){ try{ const f=await (await dh.getFileHandle(name)).getFile(); return {data:JSON.parse(await f.text()), mod:f.lastModified}; }catch(e){ return null; } },
   async load(){
     const c=await this.readJSON(this.dir,'categories.json'), s=await this.readJSON(this.dir,'settings.json');
-    const months={};
+    const months={}, del={};
     try{ const td=await this.dir.getDirectoryHandle('transactions');
-      for await (const [n,hd] of td.entries()){ const m=n.match(/^(\d{4}-\d{2})\.json$/); if(hd.kind==='file' && m){ const r=await this.readJSON(td,n); if(r && Array.isArray(r.data.items)) months[m[1]]=r.data.items; } } }catch(e){}
+      for await (const [n,hd] of td.entries()){ const m=n.match(/^(\d{4}-\d{2})\.json$/); if(hd.kind==='file' && m){ const r=await this.readJSON(td,n); if(r && Array.isArray(r.data.items)){ months[m[1]]=r.data.items; if(r.data.deleted) del[m[1]]=delMap(r.data.deleted); } } } }catch(e){}
     this.catMod=c?c.mod:0;
     if (!c && !s && !Object.keys(months).length) return null;
-    return {settings:{...(s?s.data:{}), categories:c&&Array.isArray(c.data.categories)?c.data.categories:null, learned:(c&&c.data.learned)||{}}, months};
+    return {settings:{...(s?s.data:{}), categories:c&&Array.isArray(c.data.categories)?c.data.categories:null, learned:(c&&c.data.learned)||{}}, months, del};
   },
   queue(path, getObj){
     clearTimeout(this.timers[path]);
@@ -2374,7 +2384,7 @@ const PROJ = {
     this.queue('categories.json',()=>({updated:new Date().toISOString(), categories:S.settings.categories, learned:S.settings.learned||{}}));
     this.queue('settings.json',()=>{ const {categories,learned,...rest}=S.settings; return rest; });
   },
-  saveMonth(k){ this.queue('transactions/'+k+'.json',()=>{ const items=S.months[k]||[]; return items.length?{month:k, items}:null; }); },
+  saveMonth(k){ this.queue('transactions/'+k+'.json',()=>{ const items=S.months[k]||[], del=delList(S.del[k]); return (items.length||del.length)?{month:k, items, deleted:del}:null; }); },
   saveAll(){ this.saveSettings(); Object.keys(S.months).forEach(k=>this.saveMonth(k)); }
 };
 /* ---------- Google Drive ---------- */
@@ -2420,12 +2430,13 @@ const GD = {
     if (!this.canEdit) return null;
     return (await this.api('files?supportsAllDrives=true&fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, mimeType:GFOLDER_MIME, parents:[parent]})})).id;
   },
-  async readJSON(id){ const r=await this.api(`files/${id}?alt=media&supportsAllDrives=true`,{},true); return JSON.parse(await r.text()); },
+  async readJSON(id){ const r=await this.api(`files/${id}?alt=media&supportsAllDrives=true`,{},true); return famDec(JSON.parse(await r.text())); },
+  async writeRaw(name, obj){ this.queue(name,()=>obj,true); await new Promise(r=>setTimeout(r,450)); await this.chain; },
   async open(folderId){
     const meta=await this.api(`files/${folderId}?fields=id,name,mimeType,capabilities(canAddChildren)&supportsAllDrives=true`);
     if (meta.mimeType!==GFOLDER_MIME) throw new Error('notfolder');
     this.rootId=meta.id; this.folderName=meta.name; this.canEdit=!!(meta.capabilities && meta.capabilities.canAddChildren); this.warned=false;
-    try{ this.user=(await this.api('about?fields=user(displayName,emailAddress)')).user; }catch(e){ this.user=null; }
+    try{ this.user=(await this.api('about?fields=user(displayName,emailAddress)')).user; try{ localStorage.setItem('mm-lastuser',JSON.stringify(this.user)); }catch(x){} }catch(e){ this.user=null; }
     if (meta.name==='project_data'){ this.projId=meta.id; this.dataId=null; }
     else { this.projId=await this.ensureFolder(meta.id,'project_data'); this.dataId=await this.ensureFolder(meta.id,'data'); }
     this.txId = this.projId ? await this.ensureFolder(this.projId,'transactions') : null;
@@ -2434,33 +2445,42 @@ const GD = {
   async load(){
     if (!this.projId) return null;
     const files=await this.list(this.projId), get=n=>files.find(f=>f.name===n && f.mimeType!==GFOLDER_MIME);
-    const read=async (path,f)=>{ if(!f) return null; this.ids[path]=f.id; this.mod[path]=f.modifiedTime; try{ return await this.readJSON(f.id); }catch(e){ return null; } };
+    const read=async (path,f)=>{ if(!f) return null; this.ids[path]=f.id; this.mod[path]=f.modifiedTime; try{ return await this.readJSON(f.id); }catch(e){ if(e.message==='familykey') throw e; return null; } };
+    const ff=get('family.json'); FAMILY.enabled=false; FAMILY.check=null;
+    if (ff){ try{ const fj=JSON.parse(await (await this.api(`files/${ff.id}?alt=media&supportsAllDrives=true`,{},true)).text()); this.ids['family.json']=ff.id; FAMILY.enabled=!!fj.encrypted; FAMILY.check=fj.check||null; }catch(e){} }
+    if (FAMILY.enabled && FAMILY.pending){ await adoptFamilyKey(FAMILY.pending,true); }
+    if (FAMILY.enabled && !FAMILY.key) throw new Error('familykey');
     const cd=await read('categories.json',get('categories.json')), sd=await read('settings.json',get('settings.json'));
-    const months={};
+    const months={}, del={};
     if (this.txId){
       const tf=await this.list(this.txId);
-      await Promise.all(tf.map(async f=>{ const m=f.name.match(/^(\d{4}-\d{2})\.json$/); if(!m) return; const d=await read('transactions/'+f.name,f); if(d && Array.isArray(d.items) && d.items.length) months[m[1]]=d.items; }));
+      await Promise.all(tf.map(async f=>{ const m=f.name.match(/^(\d{4}-\d{2})\.json$/); if(!m) return; const d=await read('transactions/'+f.name,f); if(d && Array.isArray(d.items)){ if(d.items.length) months[m[1]]=d.items; if(d.deleted && d.deleted.length) del[m[1]]=delMap(d.deleted); } }));
     }
     let isd=null;
     if (this.dataId){ try{ const df=(await this.list(this.dataId)).find(f=>f.name==='import_settings.json'); if(df) isd=await read('data/import_settings.json',df); }catch(e){} }
     if (!cd && !sd && !Object.keys(months).length && !isd) return null;
     const st={...(sd||{}), categories:cd&&Array.isArray(cd.categories)?cd.categories:null, learned:(cd&&cd.learned)||{}};
     if (isd){ st.cardProfiles={...(st.cardProfiles||{}), ...(isd.cardProfiles||{})}; st.importProfiles={...(st.importProfiles||{}), ...(isd.importProfiles||{})}; st.branchMap={...(st.branchMap||{}), ...(isd.branchMap||{})}; }
-    return {settings:st, months};
+    return {settings:st, months, del};
   },
   saveImportSettings(){ if(this.dataId) this.queue('data/import_settings.json',()=>({updated:new Date().toISOString(), note:'הגדרות טעינת קבצים לפי כרטיס', cardProfiles:S.settings.cardProfiles||{}, importProfiles:S.settings.importProfiles||{}, branchMap:S.settings.branchMap||{}})); },
   queue(path, getObj){
     if (!this.canEdit){ if(!this.warned){ this.warned=true; toast('יש לך הרשאת צפייה בלבד בתיקייה בדרייב, ולכן שינויים לא יישמרו שם.'); } return; }
+    if (FAMILY.enabled && !FAMILY.key && path!=='family.json'){ if(!this.warnedFam){ this.warnedFam=true; toast('הנתונים המשותפים מוצפנים. בלי קוד המשפחה השינויים נשמרים רק במכשיר.'); } return; }
     if (!this.timers[path]) this.busy++;
     clearTimeout(this.timers[path]);
     this.getters=this.getters||{}; this.getters[path]=getObj;
     // one write at a time for all files, to stay well within Google's rate limits
-    this.timers[path]=setTimeout(()=>{ delete this.timers[path]; this.chain=(this.chain||Promise.resolve()).then(()=>this.writeNow(path,getObj())).finally(()=>{ this.busy=Math.max(0,this.busy-1); }); },400);
+    this.timers[path]=setTimeout(()=>{ delete this.timers[path]; this.chain=(this.chain||Promise.resolve()).then(()=>this.writeNow(path)).finally(()=>{ this.busy=Math.max(0,this.busy-1); }); },400);
   },
-  async writeNow(path, obj, attempt=0){
+  async writeNow(path, attempt=0){
     this.failed=this.failed||new Set();
     if (!this.token){ this.failed.add(path); return; }
     try{
+      // someone else saved this file since we read it: merge their changes before writing
+      if (this.ids[path] && path!=='family.json'){ const meta=await this.api(`files/${this.ids[path]}?fields=modifiedTime&supportsAllDrives=true`); if(this.mod[path] && meta.modifiedTime>this.mod[path]){ const remote=await this.readJSON(this.ids[path]); this.mod[path]=meta.modifiedTime; applyRemote(path, remote); } }
+      let obj=this.getters[path](); if (obj===null) obj={month:path.slice(13,20), items:[], deleted:[]};
+      if (FAMILY.enabled && FAMILY.key && path!=='family.json') obj=await famEnc(obj);
       const body=JSON.stringify(obj,null,1), id=this.ids[path]; let r;
       if (id) r=await this.api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&supportsAllDrives=true&fields=id,modifiedTime`,{method:'PATCH',headers:{'Content-Type':'application/json'},body});
       else {
@@ -2474,8 +2494,8 @@ const GD = {
       if (e.message==='expired'){ this.failed.add(path); return; }
       const net = !e.status;
       const rate = net || e.status===429 || e.status>=500 || /rateLimit|userRateLimit|backendError/i.test(e.reason||'');
-      if (e.status===404 && this.ids[path] && attempt<1){ delete this.ids[path]; return this.writeNow(path,obj,attempt+1); }
-      if (rate && attempt<4){ await new Promise(r=>setTimeout(r,(2**attempt)*1000+Math.random()*500)); return this.writeNow(path,obj,attempt+1); }
+      if (e.status===404 && this.ids[path] && attempt<1){ delete this.ids[path]; return this.writeNow(path,attempt+1); }
+      if (rate && attempt<4){ await new Promise(r=>setTimeout(r,(2**attempt)*1000+Math.random()*500)); return this.writeNow(path,attempt+1); }
       this.failed.add(path);
       this.reportFail(e);
     }
@@ -2501,12 +2521,12 @@ const GD = {
     this.queue('categories.json',()=>({updated:new Date().toISOString(), categories:S.settings.categories, learned:S.settings.learned||{}}));
     this.queue('settings.json',()=>{ const {categories,learned,...rest}=S.settings; return rest; });
   },
-  saveMonth(k){ this.queue('transactions/'+k+'.json',()=>({month:k, items:S.months[k]||[]})); },
+  saveMonth(k){ this.queue('transactions/'+k+'.json',()=>({month:k, items:S.months[k]||[], deleted:delList(S.del[k])})); },
   saveAll(){ this.saveSettings(); Object.keys(S.months).forEach(k=>this.saveMonth(k)); },
   async changedRemotely(){
     const a=(await this.list(this.projId)).filter(f=>/\.json$/.test(f.name));
     const b=this.txId ? (await this.list(this.txId)).filter(f=>/\.json$/.test(f.name)).map(f=>({...f, name:'transactions/'+f.name})) : [];
-    return a.concat(b).some(f=> !this.mod[f.name] || f.modifiedTime>this.mod[f.name]);
+    return a.concat(b).some(f=> f.name!=='family.json' && (!this.mod[f.name] || f.modifiedTime>this.mod[f.name]));
   },
   async download(f){
     const r=await this.api(f.mimeType===GSHEET_MIME ? `files/${f.id}/export?mimeType=${this.q('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}` : `files/${f.id}?alt=media&supportsAllDrives=true`,{},true);
@@ -2536,7 +2556,11 @@ async function driveConnect(){
     await activateBackend(GD, first && GD.canEdit);
     toast(`מחובר ל-Google Drive${GD.user?' כ-'+GD.user.emailAddress:''}${GD.canEdit?'':' (צפייה בלבד)'}`);
     if (GD.canEdit) scanDriveData(false);
-  }catch(e){ document.getElementById('projBanner').innerHTML=''; toast(driveErr(e)); }
+  }catch(e){
+    document.getElementById('projBanner').innerHTML='';
+    if (e.message==='familykey'){ ACTIVE=GD; updateStatus(); S.tab='settings'; render(); toast('הנתונים המשותפים מוצפנים בהצפנה משפחתית. סרקו את קוד המשפחה מהמכשיר של בן או בת הזוג, או הקלידו אותו כאן.'); return; }
+    toast(driveErr(e));
+  }
 }
 async function driveReauth(){ try{ await GD.signIn(); updateStatus(); if(GD.canEdit){ GD.retryFailed(); GD.saveAll(); } render(); toast('מחובר מחדש. הנתונים נשמרו בדרייב.'); }catch(e){ toast(driveErr(e)); } }
 async function driveDisconnect(){
@@ -2561,10 +2585,10 @@ let driveChecking=false;
 async function checkDrive(){
   if (ACTIVE!==GD || !GD.token || GD.busy || driveChecking || document.querySelector('dialog[open]')) return;
   driveChecking=true;
-  try{ if (await GD.changedRemotely()){ await activateBackend(GD,false); toast('הנתונים עודכנו מ-Google Drive'); } }catch(e){}
+  try{ if (await GD.changedRemotely()) await activateBackend(GD,false); }catch(e){}
   driveChecking=false;
 }
-setInterval(()=>{ if(document.visibilityState==='visible') checkDrive(); }, 90000);
+setInterval(()=>{ if(document.visibilityState==='visible') checkDrive(); }, 25000);
 async function scanDriveData(interactive){
   if (ACTIVE!==GD || !GD.token) return;
   if (!GD.dataId){ if(interactive) toast('לא נמצאה תיקיית data בתיקיית הפרויקט בדרייב.'); return; }
@@ -2592,7 +2616,7 @@ function drivePanelHTML(){
   if (!GD.available()) return `<div class="panel" style="margin-bottom:22px"><h2>Google Drive</h2>
     <p class="muted" style="margin:0">חיבור ל-Google Drive עובד רק כשהמערכת נפתחת דרך כתובת אינטרנט, כמו <code dir="ltr">http://localhost:8000/money-manager.html</code> או אתר שאתם מארחים. Google לא מאפשרת התחברות מקובץ שנפתח ישירות מהמחשב, וגם לא מתוך Claude. כדי להריץ מקומית: בתיקייה של קובץ ה-HTML פתחו חלון פקודה והריצו <code dir="ltr">python -m http.server 8000</code>.</p>${driveHelpHTML()}</div>`;
   if (ACTIVE===GD) return `<div class="panel" style="margin-bottom:22px;border-color:var(--accent)"><h2>Google Drive</h2>
-    <p style="margin-top:0">${GD.token?'מחובר':'החיבור פג'}${GD.user?` כ-<strong dir="ltr">${esc(GD.user.emailAddress)}</strong>`:''}. הנתונים נטענים מהתיקייה <strong>${esc(GD.folderName)}</strong> ונשמרים בה${GD.canEdit?'':'. <strong>לחשבון הזה יש הרשאת צפייה בלבד</strong>, ולכן שינויים לא יישמרו בדרייב'}. שינויים של משתמשים אחרים נטענים כשחוזרים לחלון, ובכל דקה וחצי.</p>
+    <p style="margin-top:0">${GD.token?'מחובר':'החיבור פג'}${GD.user?` כ-<strong dir="ltr">${esc(GD.user.emailAddress)}</strong>`:''}. הנתונים נטענים מהתיקייה <strong>${esc(GD.folderName)}</strong> ונשמרים בה${GD.canEdit?'':'. <strong>לחשבון הזה יש הרשאת צפייה בלבד</strong>, ולכן שינויים לא יישמרו בדרייב'}. שינויים של משתמשים אחרים נטענים כשחוזרים לחלון ובכל חצי דקה, וממוזגים עם השינויים שלך, כך שאף שינוי לא הולך לאיבוד.</p>
     <p class="muted" style="font-size:.88rem">פרטי ההתחברות נשמרים רק בזיכרון של הדף ונמחקים כשסוגרים אותו. בכל פתיחה מתחברים מחדש בלחיצה.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap">${GD.token?'<button class="btn" id="gdReload">רענון מהדרייב</button>':'<button class="btn primary" id="gdReauth">התחברות מחדש</button>'}<button class="btn" id="gdShare">העתקת קישור למשתמשים אחרים</button>${VAULT.unlocked()?'<button class="btn" id="gdLock">🔒 נעילה</button>':''}<button class="btn ghost" id="gdOff">התנתקות מלאה ומחיקה מהמכשיר</button></div></div>`;
   return `<div class="panel" style="margin-bottom:22px"><h2>Google Drive</h2>
@@ -2635,6 +2659,150 @@ function fixCardsFromFileNames(){
   }));
   if (n){ touched.forEach(k=>Store.saveMonth(k)); Store.saveSettings(); bump(); setTimeout(()=>toast(`מספר הכרטיס תוקן ב-${n} תנועות לפי שם הקובץ שלהן`),600); }
 }
+/* ---------- shared use: merge, authorship, family encryption ---------- */
+S.del = S.del || {};   // tombstones per month: {month:{txId:{u,by}}} — deletions travel between devices
+function me(){ let lu={}; try{ lu=JSON.parse(localStorage.getItem('mm-lastuser')||'{}'); }catch(e){} const u=GD.user||lu||{}; return {name:u.displayName||(u.emailAddress||'').split('@')[0]||'', email:u.emailAddress||''}; }
+const delList = m => Object.entries(m||{}).map(([id,v])=>({id, u:v.u, by:v.by}));
+const delMap = arr => { const o={}; (arr||[]).forEach(d=>{ if(d && d.id) o[d.id]={u:d.u||0, by:d.by||''}; }); return o; };
+function mergeMonth(lItems, lDel, rItems, rDel){
+  const del={...(rDel||{})}; Object.entries(lDel||{}).forEach(([id,v])=>{ if(!del[id] || v.u>del[id].u) del[id]=v; });
+  const map=new Map(); (rItems||[]).forEach(t=>map.set(t.id,t));
+  (lItems||[]).forEach(t=>{ const r=map.get(t.id); if(!r || (t.u||0)>=(r.u||0)) map.set(t.id,t); });
+  const items=[...map.values()].filter(t=>!(del[t.id] && del[t.id].u>=(t.u||0))).sort((a,b)=>b.date.localeCompare(a.date));
+  const cutoff=Date.now()-180*864e5; Object.keys(del).forEach(id=>{ if((del[id].u||0)<cutoff) delete del[id]; });
+  return {items, del};
+}
+function mergeSettings(L, R){
+  if (!R) return L; if (!L) return R;
+  const out={...R, ...L};
+  const delIds={...(R.deletedIds||{}), ...(L.deletedIds||{})};
+  const byId=(a,b)=>{ const m=new Map(); (b||[]).forEach(x=>m.set(x.id,x)); (a||[]).forEach(x=>{ const r=m.get(x.id); if(!r || (x.u||0)>=(r.u||0)) m.set(x.id,x); }); return [...m.values()].filter(x=>!delIds[x.id]); };
+  if (L.categories || R.categories) out.categories=byId(L.categories,R.categories);
+  out.cards=byId(L.cards,R.cards);
+  ['learned','importProfiles','cardProfiles','branchMap','loans'].forEach(k=>{ out[k]={...(R[k]||{}), ...(L[k]||{})}; });
+  out.files={...(R.files||{}), ...(L.files||{})}; Object.keys(out.files).forEach(id=>{ if(delIds[id]) delete out.files[id]; });
+  out.importedFiles={...(R.importedFiles||{}), ...(L.importedFiles||{})}; Object.keys(out.importedFiles).forEach(k=>{ if(delIds[out.importedFiles[k]]) delete out.importedFiles[k]; });
+  out.deletedIds=delIds;
+  return out;
+}
+const markDeleted = id => { (S.settings.deletedIds ||= {})[id]=Date.now(); };
+// changes that came from the other person, to tell the user about them
+let incoming=[], incomingTimer=null;
+function noteIncoming(before, items){
+  const my=me().email; if(!my || noteIncoming.off) return;
+  items.forEach(t=>{ if(t.byE && t.byE!==my && before.get(t.id)!==(t.u||0)) incoming.push(t); });
+  if (incoming.length){ clearTimeout(incomingTimer); incomingTimer=setTimeout(()=>{ const n=incoming.length, who=[...new Set(incoming.map(t=>t.by).filter(Boolean))].join(', '); incoming=[]; render(); toast(`${n} שינויים חדשים${who?' מ'+who:''}`,[{label:'להצגה',fn:()=>{ S.filters={q:'',type:'others',nec:'',cat:'',topic:''}; S.tab='tx'; render(); }}]); },700); }
+}
+function applyRemote(path, remote){
+  if (!remote) return;
+  if (path.startsWith('transactions/')){
+    const k=path.slice(13,20), before=new Map((S.months[k]||[]).map(t=>[t.id,t.u||0]));
+    const m=mergeMonth(S.months[k], S.del[k], remote.items, delMap(remote.deleted));
+    S.months[k]=m.items; S.del[k]=m.del; noteIncoming(before, m.items);
+  } else if (path==='categories.json'){
+    S.settings=normalizeSettings(mergeSettings(S.settings, {...S.settings, categories:remote.categories||[], learned:remote.learned||{}, deletedIds:{...(remote.deletedIds||{}), ...(S.settings.deletedIds||{})}}));
+  } else if (path==='settings.json'){
+    S.settings=normalizeSettings(mergeSettings(S.settings, {...remote, categories:S.settings.categories, learned:S.settings.learned}));
+  } else if (path==='data/import_settings.json'){
+    ['cardProfiles','importProfiles','branchMap'].forEach(k=>{ S.settings[k]={...(remote[k]||{}), ...(S.settings[k]||{})}; });
+  }
+  bump(); Store.saveLocal();
+}
+function mergeLoaded(remote){
+  // combine what is on this device with what is in the shared folder, by change time; returns months that need saving back
+  const changed=new Set(); const L={settings:S.settings, months:S.months, del:S.del||{}};
+  noteIncoming.off = !Object.keys(L.months).length;   // first load on this device: nothing is "new"
+  const keys=new Set([...Object.keys(L.months), ...Object.keys(remote.months||{}), ...Object.keys(L.del), ...Object.keys(remote.del||{})]);
+  const months={}, del={};
+  keys.forEach(k=>{
+    const before=new Map((L.months[k]||[]).map(t=>[t.id,t.u||0]));
+    const m=mergeMonth(L.months[k], L.del[k], (remote.months||{})[k], (remote.del||{})[k]);
+    if (m.items.length) months[k]=m.items; if (Object.keys(m.del).length) del[k]=m.del;
+    const r=(remote.months||{})[k]||[], rd=(remote.del||{})[k]||{};
+    if (m.items.length!==r.length || Object.keys(m.del).length!==Object.keys(rd).length || m.items.some((t,i)=>{ const x=r.find(y=>y.id===t.id); return !x || (x.u||0)!==(t.u||0); })) changed.add(k);
+    noteIncoming(before, m.items);
+  });
+  const settings=normalizeSettings(mergeSettings(L.settings, remote.settings));
+  noteIncoming.off=false;
+  const stable=o=>JSON.stringify(o,(k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v);
+  const settingsChanged = stable(settings)!==stable(normalizeSettings(JSON.parse(JSON.stringify(remote.settings||{}))));
+  return {settings, months, del, changed, settingsChanged};
+}
+
+/* family encryption: everything in project_data is encrypted with one family key that only your devices hold */
+const FAMILY={ enabled:false, key:null, raw:null, check:null, pending:null };
+const B32='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function b32enc(bytes){ let bits=0, val=0, out=''; for(const b of bytes){ val=(val<<8)|b; bits+=8; while(bits>=5){ out+=B32[(val>>>(bits-5))&31]; bits-=5; } } if(bits>0) out+=B32[(val<<(5-bits))&31]; return out; }
+function b32dec(str){ const s=String(str||'').toUpperCase().replace(/[^A-Z2-7]/g,''); let bits=0, val=0; const out=[]; for(const c of s){ val=(val<<5)|B32.indexOf(c); bits+=5; if(bits>=8){ out.push((val>>>(bits-8))&255); bits-=8; } } return new Uint8Array(out); }
+function b64e(buf){ const a=new Uint8Array(buf); let s=''; for(let i=0;i<a.length;i+=0x8000) s+=String.fromCharCode.apply(null,a.subarray(i,i+0x8000)); return btoa(s); }
+function b64d(s){ return Uint8Array.from(atob(s),c=>c.charCodeAt(0)); }
+const familyCode = raw => b32enc(raw).match(/.{1,4}/g).join('-');
+async function familySet(raw){ FAMILY.raw=new Uint8Array(raw); FAMILY.key=await crypto.subtle.importKey('raw',FAMILY.raw,{name:'AES-GCM'},false,['encrypt','decrypt']); }
+async function famEnc(obj){ const iv=crypto.getRandomValues(new Uint8Array(12)); const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},FAMILY.key,te.encode(JSON.stringify(obj))); return {mmenc:1, iv:b64e(iv), ct:b64e(ct)}; }
+async function famDec(obj){ if(!obj || !obj.mmenc) return obj; if(!FAMILY.key) throw new Error('familykey'); return JSON.parse(td.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(obj.iv)},FAMILY.key,b64d(obj.ct)))); }
+async function familyVerify(raw){ if(!FAMILY.check) return true; try{ const k=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['decrypt']); const t=td.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(FAMILY.check.iv)},k,b64d(FAMILY.check.ct))); return t==='money-manager-family'; }catch(e){ return false; } }
+async function adoptFamilyKey(raw, quiet){
+  if (!(await familyVerify(raw))){ toast('קוד המשפחה לא מתאים לנתונים בתיקייה.'); return false; }
+  await familySet(raw); FAMILY.pending=null;
+  if (VAULT.unlocked()) VAULT.queueSave();
+  if (!quiet) toast(VAULT.unlocked()?'קוד המשפחה נשמר במכשיר בצורה מוצפנת':'קוד המשפחה פעיל עד סגירת האפליקציה. כדי לשמור אותו, הפעילו נעילה בהגדרות.');
+  return true;
+}
+function loadQR(){ return new Promise((res,rej)=>{ if(window.QRCode) return res(); const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'; s.onload=()=>res(); s.onerror=()=>rej(new Error('qr')); document.head.appendChild(s); }); }
+async function showFamilyCode(){
+  if (!FAMILY.raw){ toast('אין קוד משפחה במכשיר הזה.'); return; }
+  const link=location.origin+location.pathname+'#fk='+b32enc(FAMILY.raw)+'&gclient='+encodeURIComponent(GD.clientId())+'&gfolder='+encodeURIComponent(GD.folderId());
+  let d=document.getElementById('famDlg'); if(!d){ d=document.createElement('dialog'); d.id='famDlg'; document.body.appendChild(d); }
+  d.innerHTML=`<form method="dialog" style="text-align:center"><h2>קוד המשפחה</h2>
+    <p style="margin-top:0">במכשיר של בן או בת הזוג: פותחים את <strong>מצלמת הטלפון</strong> וסורקים את הקוד. האפליקציה תיפתח עם הקוד והגדרות החיבור.</p>
+    <div id="famQR" style="display:inline-block;background:#fff;padding:12px;border-radius:16px;margin:6px auto"></div>
+    <p class="muted" style="font-size:.86rem;margin:10px 0 4px">או להקליד את הקוד ידנית בהגדרות:</p>
+    <div dir="ltr" style="font-family:ui-monospace,monospace;font-size:.92rem;letter-spacing:.04em;background:var(--sunk);border-radius:12px;padding:10px;word-break:break-all">${familyCode(FAMILY.raw)}</div>
+    <p class="muted" style="font-size:.84rem;margin:10px 0 0">⚠️ שמרו את הקוד גם במקום בטוח (כתוב על נייר או במנהל סיסמאות). בלי הקוד אי אפשר לפתוח את הנתונים המוצפנים בדרייב. אל תשלחו אותו בהודעה רגילה.</p>
+    <div class="dlg-actions" style="justify-content:center"><button class="btn primary" value="ok">סגירה</button></div></form>`;
+  d.showModal();
+  try{ await loadQR(); new QRCode(d.querySelector('#famQR'),{text:link, width:220, height:220, correctLevel:QRCode.CorrectLevel.M}); }
+  catch(e){ d.querySelector('#famQR').outerHTML='<p class="muted">לא הצלחתי לטעון את יצירת הקוד הסריק. אפשר להשתמש בקוד הטקסטואלי.</p>'; }
+}
+async function enableFamily(){
+  if (!(ACTIVE===GD && GD.token && GD.canEdit)){ toast('צריך להיות מחובר ל-Google Drive עם הרשאת עריכה.'); return; }
+  if (!VAULT.unlocked()){ toast('קודם הפעילו נעילה (Face ID / קוד) כדי שקוד המשפחה יישמר בצורה מוצפנת.'); return; }
+  const raw=crypto.getRandomValues(new Uint8Array(32)); await familySet(raw);
+  const iv=crypto.getRandomValues(new Uint8Array(12)); const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},FAMILY.key,te.encode('money-manager-family'));
+  FAMILY.check={iv:b64e(iv), ct:b64e(ct)}; FAMILY.enabled=true;
+  await GD.writeRaw('family.json',{encrypted:true, check:FAMILY.check, created:new Date().toISOString(), by:me().name});
+  VAULT.queueSave(); GD.saveAll(); GD.saveImportSettings(); render();
+  toast('ההצפנה המשפחתית הופעלה. הנתונים בדרייב נשמרים עכשיו מוצפנים.'); showFamilyCode();
+}
+async function disableFamily(){
+  if (!FAMILY.key){ toast('צריך את קוד המשפחה כדי לבטל את ההצפנה.'); return; }
+  FAMILY.enabled=false; FAMILY.check=null;
+  await GD.writeRaw('family.json',{encrypted:false, disabledAt:new Date().toISOString(), by:me().name});
+  GD.saveAll(); GD.saveImportSettings(); render(); toast('ההצפנה המשפחתית בוטלה. הנתונים בדרייב יישמרו בלי הצפנה.');
+}
+function familyPanelHTML(){
+  if (ACTIVE!==GD) return '';
+  const st = FAMILY.enabled ? (FAMILY.key?'✅ הנתונים בתיקייה המשותפת מוצפנים, והקוד שמור במכשיר הזה.':'🔑 הנתונים בתיקייה המשותפת מוצפנים, אבל במכשיר הזה עוד אין את קוד המשפחה.') : 'הנתונים בתיקייה המשותפת נשמרים בלי הצפנה (מוגנים בחשבונות Google).';
+  return `<div class="panel" style="margin-bottom:22px${FAMILY.enabled&&!FAMILY.key?';border-color:var(--imp)':''}"><h2>👨‍👩‍👧 שיתוף והצפנה משפחתית</h2>
+    <p style="margin-top:0">${st}</p>
+    <p class="muted" style="font-size:.88rem">בהצפנה משפחתית, הנתונים ב-project_data מוצפנים במפתח שקיים רק במכשירים שלכם. גם מי שיגיע לחשבון Google או לקבצים לא יוכל לקרוא אותם. קובצי הבנק והאשראי בתיקייה data נשארים כמו שהעליתם אותם.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${!FAMILY.enabled?`<button class="btn primary" id="famOn" ${GD.canEdit?'':'disabled'}>הפעלת הצפנה משפחתית</button>`:''}
+      ${FAMILY.enabled&&FAMILY.key?'<button class="btn primary" id="famShow">הצגת קוד המשפחה לסריקה</button>':''}
+      ${FAMILY.enabled&&!FAMILY.key?'<input id="famCode" dir="ltr" placeholder="XXXX-XXXX-…" style="flex:1;min-width:200px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--surface)"><button class="btn primary" id="famEnter">שמירת הקוד</button>':''}
+      ${FAMILY.enabled&&FAMILY.key&&GD.canEdit?'<button class="btn ghost small" id="famOff" style="color:var(--exp)">ביטול ההצפנה המשפחתית</button>':''}
+    </div>
+    ${FAMILY.enabled&&!FAMILY.key?'<p class="muted" style="font-size:.86rem;margin:8px 0 0">את הקוד מקבלים מהמכשיר של בן או בת הזוג: הגדרות ← "הצגת קוד המשפחה לסריקה", וסורקים במצלמה.</p>':''}
+  </div>`;
+}
+function bindFamily(){
+  const q=s=>app.querySelector(s);
+  q('#famOn')?.addEventListener('click',enableFamily);
+  q('#famShow')?.addEventListener('click',showFamilyCode);
+  q('#famOff')?.addEventListener('click',e=>{ const b=e.currentTarget; if(!b.dataset.sure){ b.dataset.sure='1'; b.textContent='לבטל? לחצו שוב'; return; } disableFamily(); });
+  q('#famEnter')?.addEventListener('click',async()=>{ const raw=b32dec(q('#famCode').value); if(raw.length!==32){ toast('הקוד לא שלם. בדקו שהעתקתם את כולו.'); return; } if(await adoptFamilyKey(raw)){ try{ await activateBackend(GD,true); }catch(e){ toast(driveErr(e)); } } });
+}
+
 function migrateData(){
   { const touched=new Set(); Object.entries(S.months).forEach(([k,arr])=>arr.forEach(t=>{ if(t.type==='income' && t.catId==='extra_inc' && isCreditRow(t)){ t.catId=kwCat(t.desc,'expense')||defaultBranchCat(t.branch)||'uncat'; touched.add(k); } }));
     if (touched.size) setTimeout(()=>{ touched.forEach(k=>Store.saveMonth(k)); toast('זיכויים מכרטיסי אשראי הועברו מ"הכנסות" לקטגוריות ההוצאה שלהם'); },800); }
@@ -2666,10 +2834,10 @@ async function activateProj(handle, merge){
 async function activateBackend(be, merge){
   const fromFolder=await be.load();
   if (fromFolder){
-    const d = merge ? mergeData(fromFolder, {settings:S.settings, months:S.months}) : {settings:normalizeSettings(fromFolder.settings), months:fromFolder.months};
-    S.settings=d.settings; S.months=d.months; migrateData(); fixCardsFromFileNames();
+    const d=mergeLoaded(fromFolder);
+    S.settings=d.settings; S.months=d.months; S.del=d.del; migrateData(); fixCardsFromFileNames();
     Store.saveLocal();
-    if (merge) be.saveAll();
+    if (merge) be.saveAll(); else { d.changed.forEach(k=>be.saveMonth(k)); if (d.settingsChanged) be.saveSettings(); }
   } else be.saveAll();
   const keys=monthKeys(); if(keys.length && !S.months[S.month]?.length) S.month=keys[keys.length-1];
   document.getElementById('projBanner').innerHTML=''; updateStatus(); render();
@@ -2720,6 +2888,7 @@ function projPanelHTML(){
 }
 function bindProjPanel(){
   bindSecurity();
+  bindFamily();
   bindDrivePanel();
   app.querySelector('#projPick')?.addEventListener('click',connectProj);
   app.querySelector('#projOff')?.addEventListener('click',disconnectProj);
@@ -2875,6 +3044,7 @@ function renderSettings(){
   <h2 style="margin:0 0 14px">⚙️ הגדרות</h2>
   ${securityPanelHTML()}
   ${drivePanelHTML()}
+  ${familyPanelHTML()}
   ${projPanelHTML()}
   <div class="panel" style="margin-bottom:22px">
     <h2>משכורות בסוף החודש</h2>
@@ -2966,25 +3136,25 @@ function renderCats(){
       else if(f==='budget') c.budget=Math.max(0,+inp.value||0);
       else if(f==='name'){ if(inp.value.trim()) c.name=inp.value.trim(); }
       else c[f]=inp.value;
-      Store.saveSettings(); toast('נשמר');
+      c.u=Date.now(); Store.saveSettings(); toast('נשמר');
       if(f==='keywords') offerRecat();
     }));
     row.querySelector('[data-delcat]')?.addEventListener('click',()=>{
       const used=allTx().filter(t=>t.catId===c.id);
-      S.settings.categories=cats().filter(x=>x.id!==c.id);
+      S.settings.categories=cats().filter(x=>x.id!==c.id); markDeleted(c.id);
       used.forEach(t=>updateTx(t.id,{catId:t.type==='income'?'extra_inc':'uncat'}));
       Store.saveSettings(); renderCats(); toast(`הקטגוריה נמחקה${used.length?`. ${used.length} תנועות הועברו ללא מסווג`:''}`);
     });
   });
   app.querySelectorAll('[data-kid]').forEach(row=>{
     const c=cardsList().find(x=>x.id===row.dataset.kid);
-    row.querySelector('input').onchange=e=>{ if(e.target.value.trim()){ c.name=e.target.value.trim(); Store.saveSettings(); toast('נשמר'); } };
+    row.querySelector('input').onchange=e=>{ if(e.target.value.trim()){ c.name=e.target.value.trim(); c.u=Date.now(); Store.saveSettings(); toast('נשמר'); } };
     row.querySelector('[data-flip]')?.addEventListener('click',()=>{
       const used=allTx().filter(t=>t.card===c.id), backup=used.map(t=>({id:t.id, type:t.type, catId:t.catId, inst:t.inst||null}));
       used.forEach(t=>{ const type=t.type==='income'?'expense':'income'; updateTx(t.id,{type, catId:autoCat(t.desc,type), inst:type==='income'?null:t.inst, nec:null}); });
       renderCats(); toast(`הוחלפו הכנסות והוצאות ב-${used.length} תנועות של "${c.name}"`,[{label:'ביטול',fn:()=>{ backup.forEach(b=>updateTx(b.id,{type:b.type, catId:b.catId, inst:b.inst})); render(); }}]);
     });
-    row.querySelector('[data-delcard]').onclick=()=>{ const used=allTx().filter(t=>t.card===c.id); S.settings.cards=cardsList().filter(x=>x.id!==c.id); used.forEach(t=>updateTx(t.id,{card:null})); Store.saveSettings(); renderCats(); toast('הכרטיס נמחק'+(used.length?`. ${used.length} תנועות סומנו ללא כרטיס`:'')); };
+    row.querySelector('[data-delcard]').onclick=()=>{ const used=allTx().filter(t=>t.card===c.id); S.settings.cards=cardsList().filter(x=>x.id!==c.id); markDeleted(c.id); used.forEach(t=>updateTx(t.id,{card:null})); Store.saveSettings(); renderCats(); toast('הכרטיס נמחק'+(used.length?`. ${used.length} תנועות סומנו ללא כרטיס`:'')); };
   });
   app.querySelector('#nkAdd').onclick=()=>{ const v=app.querySelector('#nkName').value.trim(); if(!v){ app.querySelector('#nkName').focus(); return; } ensureCard(v); renderCats(); toast('הכרטיס נוסף'); };
   app.querySelector('#ncAdd').onclick=()=>{
@@ -3182,15 +3352,17 @@ window.addEventListener('online',netStatus); window.addEventListener('offline',n
   if (VAULT.meta){
     document.getElementById('app').innerHTML='';
     const p=await showLock();
-    data.settings=p.settings||data.settings; data.months=p.months||data.months||{};
+    data.settings=p.settings||data.settings; data.months=p.months||data.months||{}; data.del=p.del||{};
+    if (p.familyKey){ try{ await familySet(b32dec(p.familyKey)); }catch(e){} }
     try{ if(p.gclient && !localStorage.getItem('mm-gclient')) localStorage.setItem('mm-gclient',p.gclient); if(p.gfolder && !localStorage.getItem('mm-gfolder')) localStorage.setItem('mm-gfolder',p.gfolder); }catch(e){}
     setTimeout(updateLockBtn,0);
     encryptRowCaches();
   }
   S.settings = normalizeSettings(data.settings);
-  S.months = data.months; migrateData(); fixCardsFromFileNames();
+  S.months = data.months; S.del = data.del||{}; migrateData(); fixCardsFromFileNames();
   const keys=monthKeys(); S.month = keys.length? keys[keys.length-1] : todayISO().slice(0,7);
-  try{ const hp=new URLSearchParams(location.hash.slice(1)); if(hp.get('gclient')) localStorage.setItem('mm-gclient',hp.get('gclient')); if(hp.get('gfolder')) localStorage.setItem('mm-gfolder',parseFolderId(hp.get('gfolder'))); if(hp.get('gclient')||hp.get('gfolder')) history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+  try{ const hp0=new URLSearchParams(location.hash.slice(1)); if(hp0.get('fk')){ const raw=b32dec(hp0.get('fk')); if(raw.length===32){ FAMILY.pending=raw; await familySet(raw); if(VAULT.unlocked()) VAULT.queueSave(); setTimeout(()=>toast(VAULT.unlocked()?'קוד המשפחה התקבל ונשמר במכשיר. התחברו ל-Google Drive.':'קוד המשפחה התקבל. כדי לשמור אותו במכשיר, הפעילו נעילה בהגדרות.'),800); } } }catch(e){}
+  try{ const hp=new URLSearchParams(location.hash.slice(1)); if(hp.get('gclient')) localStorage.setItem('mm-gclient',hp.get('gclient')); if(hp.get('gfolder')) localStorage.setItem('mm-gfolder',parseFolderId(hp.get('gfolder'))); if(hp.get('gclient')||hp.get('gfolder')||hp.get('fk')) history.replaceState(null,'',location.pathname+location.search); }catch(e){}
   updateStatus(); setTimeout(netStatus,0);
   if (!data.settings) Store.saveSettings();
   if (FS_API){
