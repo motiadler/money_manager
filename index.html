@@ -2,14 +2,14 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="theme-color" content="#4F46E5">
+<meta name="theme-color" content="#D3E0EC">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="הכסף שלי">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>הכסף שלי · ניהול הכנסות והוצאות</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async></script>
 <style>
@@ -162,6 +162,15 @@ td select:hover,td select:focus{border-color:var(--line);background:var(--surfac
 .hist-btn:hover{color:var(--ink);background:var(--sunk)}
 .is-excl td{opacity:.45}.is-excl td.amt{text-decoration:line-through}.is-excl td:has(input[data-incl]),.is-excl td:has(input[data-mincl]),.is-excl td:has(input[data-pincl]){opacity:1}
 .issue-row td{font-size:.88rem}
+.link-tag{border:0;border-radius:999px;padding:1px 9px;font:inherit;font-size:.78rem;font-weight:500;cursor:default;display:inline-block}
+button.link-tag{cursor:pointer}
+.link-tag.ok{background:var(--inc-soft);color:var(--inc)}
+.link-tag.warn{background:var(--imp-soft);color:color-mix(in srgb,var(--imp) 75%,var(--ink))}
+#lockScreen{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:24px;background:var(--bg);overflow:auto}
+#lockScreen *{box-sizing:border-box}
+.lock-card{width:min(380px,100%);background:var(--surface);border-radius:28px;padding:28px 22px;box-shadow:var(--shadow);text-align:center}
+.lock-logo{width:72px;height:72px;margin:0 auto;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:2rem;color:#fff;background:radial-gradient(circle at 35% 30%,#8FC5B2,var(--sage,#4E8F79) 60%,#2F6553);box-shadow:0 0 0 4px color-mix(in srgb,var(--sage,#4E8F79) 30%,transparent)}
+.lock-or{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted);font-size:.86rem}.lock-or::before,.lock-or::after{content:"";flex:1;height:1px;background:var(--line)}
 .inst-tag{display:inline-block;font-size:.74rem;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;margin-inline-start:6px;white-space:nowrap}
 .prog{height:8px;background:var(--sunk);border-radius:999px;overflow:hidden;min-width:90px}.prog span{display:block;height:100%;background:var(--accent);border-radius:999px}
 .chk{display:flex;gap:8px;align-items:center;font-weight:500;cursor:pointer}
@@ -228,7 +237,8 @@ code{background:var(--sunk);padding:1px 6px;border-radius:6px;font-size:.88em}
   .wrap{padding:0 14px calc(96px + env(safe-area-inset-bottom,0px))}
   header.top{margin:0 -14px;padding:10px 14px;backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--bg)}
   header.top > div{display:grid!important;grid-template-columns:auto 1fr;gap:8px!important}
-  #rangeCtl{grid-column:1/-1}
+  #rangeCtl,#basisSeg{grid-column:1/-1}
+  #basisSeg{display:grid!important;grid-template-columns:1fr 1fr;order:-1}
   .filters{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
   .filters::-webkit-scrollbar{display:none}
   .filters input[type=search]{min-width:150px}
@@ -268,6 +278,101 @@ code{background:var(--sunk);padding:1px 6px;border-radius:6px;font-size:.88em}
   .tx-table .row-actions{grid-area:act;text-align:left}
 }
 @media (min-width:761px){ .tx-table .td-meta{display:none} }
+
+/* ===== Wavez-inspired theme ===== */
+:root{
+  --bg:#D3E0EC; --surface:#FBF9F3; --sunk:#EDF1F4; --ink:#1E2C3A; --muted:#6B7C8B; --line:#E3E4DE;
+  --accent:#3F6FA3; --accent-soft:#E2ECF6; --accent-ink:#FFFFFF;
+  --sage:#4E8F79; --sage-soft:#DCEBE4; --sand:#C3913B; --sand-soft:#F3E6C9; --brick:#B2604F; --brick-soft:#F4E1DA;
+  --ess:#4A7DB5; --imp:#C3913B; --opt:#B2604F; --inc:#3E8B6F; --exp:#B2604F;
+  --inc-soft:#DCEBE4; --exp-soft:#F4E1DA; --imp-soft:#F3E6C9;
+  --radius-s:14px; --radius-l:26px;
+  --shadow:0 1px 0 rgba(255,255,255,.8) inset, 0 2px 4px rgba(30,44,58,.05), 0 12px 26px -16px rgba(30,44,58,.35);
+  --display:"Fredoka","Rubik","Segoe UI",Arial,sans-serif;
+  --serif:var(--display);
+  --sans:"Rubik","Segoe UI",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1B28; --surface:#172636; --sunk:#1F3245; --ink:#E6EDF3; --muted:#93A5B5; --line:#26394C;
+    --accent:#7FA7D6; --accent-soft:#1D3247; --accent-ink:#0F1B28;
+    --sage:#6DB79B; --sage-soft:#173328; --sand:#DDB066; --sand-soft:#33291A; --brick:#D88675; --brick-soft:#36211C;
+    --ess:#7FA7D6; --imp:#DDB066; --opt:#D88675; --inc:#6DB79B; --exp:#D88675;
+    --inc-soft:#173328; --exp-soft:#36211C; --imp-soft:#33291A;
+    --shadow:0 2px 4px rgba(0,0,0,.25), 0 14px 30px -18px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1B28; --surface:#172636; --sunk:#1F3245; --ink:#E6EDF3; --muted:#93A5B5; --line:#26394C;
+  --accent:#7FA7D6; --accent-soft:#1D3247; --accent-ink:#0F1B28;
+  --sage:#6DB79B; --sage-soft:#173328; --sand:#DDB066; --sand-soft:#33291A; --brick:#D88675; --brick-soft:#36211C;
+  --ess:#7FA7D6; --imp:#DDB066; --opt:#D88675; --inc:#6DB79B; --exp:#D88675;
+  --inc-soft:#173328; --exp-soft:#36211C; --imp-soft:#33291A;
+}
+body{background:var(--bg) radial-gradient(1200px 500px at 50% -200px, color-mix(in srgb,#fff 35%,transparent), transparent)}
+h1,h2,h3,.kpi-val,.sav-num,.stat b,.hero-line,.brand{font-family:var(--display)}
+h2{font-weight:600;font-size:1.2rem}
+.panel,.kpi,.table-wrap{border-radius:var(--radius-l);border:1px solid color-mix(in srgb,#fff 70%,transparent)}
+.btn{border-radius:999px;font-weight:600}
+.btn.primary{background:var(--accent);border-color:var(--accent);box-shadow:0 4px 0 color-mix(in srgb,var(--accent) 70%,#000 30%)}
+.btn.primary:active{transform:translateY(2px);box-shadow:0 2px 0 color-mix(in srgb,var(--accent) 70%,#000 30%)}
+.brand::before{content:"₪";font-family:var(--display);font-weight:700;color:#fff;border-radius:50%;width:44px;height:44px;
+  background:radial-gradient(circle at 35% 30%,#8FC5B2,var(--sage) 60%,#2F6553);box-shadow:0 0 0 3px color-mix(in srgb,var(--sage) 35%,transparent),0 6px 14px -6px var(--sage)}
+.month-ctl{background:var(--surface);border:1px solid color-mix(in srgb,#fff 70%,transparent)}
+nav.tabs{background:transparent;box-shadow:none;padding:4px 2px;gap:8px}
+nav.tabs button{background:var(--surface);border-radius:16px;padding:10px 16px;box-shadow:var(--shadow);border:2px solid transparent;color:var(--ink)}
+nav.tabs button:hover{background:var(--surface);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+nav.tabs button[aria-selected="true"]{background:var(--surface);color:var(--accent);border-color:var(--accent)}
+.seg{background:color-mix(in srgb,var(--ink) 7%,transparent);border-radius:999px}
+.seg button{border-radius:999px}
+.badge{border-radius:999px}
+.cat-btn{background:var(--sunk);border-radius:999px}
+td.amt,.kpi-val,.hb-val{font-family:var(--display);font-weight:600}
+.filters input,.filters select,.field input,.field select,.field textarea{border-radius:14px;background:var(--surface)}
+th{background:var(--surface)}
+tbody tr:hover{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+dialog{background:var(--surface);border-radius:28px}
+.toast{border-radius:18px}
+.kpi{padding:16px 18px}
+.kpi-ico{border-radius:50%}
+
+/* status hero: ring + verdict card */
+.status-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:14px;margin-bottom:14px;position:relative}
+.sh-card{position:relative;overflow:hidden;border-radius:var(--radius-l);background:var(--surface);box-shadow:var(--shadow);border:1px solid color-mix(in srgb,#fff 70%,transparent);padding:18px;min-height:200px;display:flex;flex-direction:column}
+.sh-card::after{content:"";position:absolute;inset:auto 0 0 0;height:46%;background:var(--tone-soft);border-top:0;z-index:0}
+.sh-card svg.wave{position:absolute;left:0;right:0;bottom:46%;width:100%;height:22px;transform:translateY(50%);z-index:1}
+.sh-card > *:not(.wave){position:relative;z-index:2}
+.sh-ring{align-items:center;justify-content:center;gap:6px}
+.sh-pill{background:var(--surface);border:2px solid color-mix(in srgb,var(--tone) 35%,transparent);border-radius:999px;padding:2px 16px;font-family:var(--display);font-weight:600}
+.ring{width:132px;height:132px;position:relative;display:grid;place-items:center}
+.ring svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ring b{font-family:var(--display);font-size:2.4rem;font-weight:700;color:var(--tone);line-height:1}
+.ring small{display:block;text-align:center;color:var(--muted);font-family:var(--display);font-size:.9rem}
+.ring-in{position:relative;display:flex;flex-direction:column;align-items:center;background:var(--surface);width:104px;height:104px;border-radius:50%;justify-content:center;box-shadow:0 2px 10px -4px rgba(0,0,0,.2)}
+.sh-verdict{gap:12px}
+.verdict{display:flex;align-items:center;gap:12px}
+.verdict i{font-style:normal;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--tone);color:#fff;font-weight:800;font-size:1.4rem;box-shadow:0 4px 10px -4px var(--tone);flex:none}
+.verdict span{font-family:var(--display);font-weight:700;font-size:clamp(2rem,6vw,3.1rem);line-height:1;color:var(--tone)}
+.bubble{margin-top:auto;background:color-mix(in srgb,var(--surface) 92%,transparent);border-radius:18px 18px 18px 6px;padding:12px 14px;font-size:1rem;line-height:1.5;box-shadow:0 2px 8px -4px rgba(0,0,0,.15)}
+.tone-good{--tone:var(--sage);--tone-soft:var(--sage-soft)}
+.tone-mid{--tone:var(--sand);--tone-soft:var(--sand-soft)}
+.tone-bad{--tone:var(--brick);--tone-soft:var(--brick-soft)}
+@media (max-width:760px){
+  .status-hero{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:10px}
+  .sh-card{padding:14px;min-height:180px}
+  .ring{width:112px;height:112px}.ring-in{width:88px;height:88px}.ring b{font-size:2rem}
+  .verdict i{width:36px;height:36px;font-size:1.1rem}
+  .bubble{font-size:.9rem;padding:10px 12px}
+  /* sand bottom bar with raised round buttons */
+  .bnav{background:linear-gradient(var(--sand-soft),color-mix(in srgb,var(--sand-soft) 80%,var(--sand)));border-top:0;box-shadow:0 -6px 18px -12px rgba(0,0,0,.35);padding-top:0}
+  .bnav button{gap:4px;margin-top:-18px;color:color-mix(in srgb,var(--ink) 80%,var(--sand));font-family:var(--display);font-weight:600;font-size:.74rem}
+  .bnav button span{filter:none;opacity:1;width:50px;height:50px;border-radius:50%;display:grid;place-items:center;background:var(--surface);box-shadow:0 4px 0 color-mix(in srgb,var(--sand) 55%,transparent),0 8px 16px -8px rgba(0,0,0,.35);font-size:1.3rem}
+  .bnav button[aria-selected="true"]{color:var(--accent)}
+  .bnav button[aria-selected="true"] span{box-shadow:0 0 0 3px var(--accent),0 4px 0 color-mix(in srgb,var(--sand) 55%,transparent)}
+  dialog::before{content:"";display:block;width:44px;height:5px;border-radius:9px;background:var(--line);margin:-8px auto 12px}
+  #addBtn{border-radius:50%;box-shadow:0 5px 0 color-mix(in srgb,var(--accent) 65%,#000 35%),0 12px 24px -8px var(--accent)}
+}
+
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -280,6 +385,10 @@ code{background:var(--sunk);padding:1px 6px;border-radius:6px;font-size:.88em}
         <button type="button" data-pm="month" aria-pressed="true">חודש</button>
         <button type="button" data-pm="range" aria-pressed="false">טווח</button>
       </div>
+      <div class="seg" role="group" aria-label="תצוגה" id="basisSeg" title="איך לשייך תנועות לחודשים">
+        <button type="button" data-gb="charge" aria-pressed="true">💳 לפי מועד חיוב</button>
+        <button type="button" data-gb="deal" aria-pressed="false">🛒 לפי מועד עסקה</button>
+      </div>
       <div class="month-ctl" id="rangeCtl" hidden style="padding:4px 10px;gap:8px;flex-wrap:wrap;border-radius:var(--radius-s)">
         <select id="rPreset" aria-label="בחירה מהירה" style="border:0;background:transparent;font-weight:600"><option value="">בחירה מהירה</option><option value="m3">3 חודשים אחרונים</option><option value="m6">6 חודשים אחרונים</option><option value="m12">12 חודשים אחרונים</option><option value="ytd">מתחילת השנה</option><option value="py">השנה הקודמת</option><option value="all">כל התקופה</option></select>
         <label class="muted" for="rFrom" style="font-size:.85rem">מ-</label><input type="date" id="rFrom" style="border:1px solid var(--line);border-radius:4px;background:var(--surface);padding:3px 6px">
@@ -290,6 +399,7 @@ code{background:var(--sunk);padding:1px 6px;border-radius:6px;font-size:.88em}
         <select id="mSel" aria-label="חודש"></select>
         <button id="mNext" aria-label="חודש הבא">‹</button>
       </div>
+      <button class="btn" id="lockBtn" hidden title="נעילה" aria-label="נעילה">🔒</button>
       <button class="btn" id="gBtn" title="חיבור ל-Google Drive">Google Drive</button>
       <button class="btn primary" id="addBtn">+ תנועה חדשה</button>
     </div>
@@ -404,6 +514,7 @@ code{background:var(--sunk);padding:1px 6px;border-radius:6px;font-size:.88em}
   <button data-go="import"><span>📥</span>ייבוא מקובץ</button>
   <button data-go="cats"><span>🏷️</span>קטגוריות, תקציב והגדרות</button>
   <button data-go="drive"><span>☁️</span>Google Drive</button>
+  <button data-go="lock" id="moreLock" hidden><span>🔒</span>נעילה</button>
 </div>
 
 <div class="toast" id="toast" hidden role="status"><span id="toastMsg"></span><span id="toastActs"></span></div>
@@ -474,6 +585,7 @@ const DEFAULT_CATS = [
   ['gifts','מתנות ותרומות','פנאי','expense','optional','מתנה,תרומה'],
   ['loans','החזר הלוואות','פיננסים','expense','essential','הלוואה,החזר הלוואה'],
   ['fees','עמלות וריבית','פיננסים','expense','important','עמלה,דמי כרטיס,ריבית'],
+  ['cardpay','חיוב כרטיס אשראי (ללא פירוט)','פיננסים','expense','important',''],
   ['misc','שונות','אחר','expense','optional',''],
   ['uncat','לא מסווג','אחר','expense','important','']
 ].map(([id,name,topic,kind,nec,kw]) => ({id,name,topic,kind,nec,keywords:kw?kw.split(',').map(s=>s.trim()).filter(Boolean):[],budget:0}));
@@ -535,7 +647,7 @@ const Store = {
     });
     this.chain[docId] = next; return next;
   },
-  saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({settings:S.settings, months:S.months})); }catch(e){} },
+  saveLocal(){ if (VAULT.meta){ try{ localStorage.removeItem(LS_KEY); }catch(e){} if (VAULT.unlocked()) VAULT.queueSave(); return; } try{ localStorage.setItem(LS_KEY, JSON.stringify({settings:S.settings, months:S.months})); }catch(e){} },
   saveMonth(k){ const items = S.months[k]||[]; if (ACTIVE) ACTIVE.saveMonth(k); return this.write('m_'+k, items.length?{items}:null); },
   saveSettings(){ if (ACTIVE) ACTIVE.saveSettings(); return this.write('settings', S.settings); }
 };
@@ -544,16 +656,57 @@ const Store = {
 const S = { queue:[], batch:null, settings:null, months:{}, month:null, tab:'overview', filters:{q:'',type:'',nec:'',cat:'',topic:''}, imp:null, cut:25 };
 const cats = () => S.settings.categories;
 const catById = id => cats().find(c=>c.id===id) || cats().find(c=>c.id==='uncat');
-const necOf = t => t.type==='income' ? null : (t.nec || catById(t.catId).nec);
+const effKind = t => catById(t.catId).kind==='income' ? 'income' : 'expense';
+const isRefund = t => t.type==='income' && effKind(t)==='expense';
+const necOf = t => effKind(t)==='income' ? null : (t.nec || catById(t.catId).nec);
 const allTx = () => Object.values(S.months).flat();
-const monthTx = k => S.months[k]||[];
 const monthKeys = () => Object.keys(S.months).filter(k=>S.months[k].length).sort();
 const inRange = d => !!S.range && d>=S.range.from && d<=S.range.to;
-function periodTx(){
-  if (!S.range) return monthTx(S.month);
-  const a=S.range.from.slice(0,7), b=S.range.to.slice(0,7), out=[];
-  for (const k in S.months) if (k>=a && k<=b) S.months[k].forEach(t=>{ if(inRange(t.date)) out.push(t); });
-  return out.sort((x,y)=>y.date.localeCompare(x.date));
+/* ---- reporting basis ----
+   charge basis (reports): bank rows by bank date; card rows by the date their statement was charged in the bank;
+   deal basis (transactions list, optional): card rows by purchase date.
+   Bank card-company charges count only when no card statement is linked to them, so totals always match the bank. */
+let dataVer=0, IDX=null;
+const bump=()=>{ dataVer++; };
+const isCreditRow = t => t.srcKind==='credit' || (!t.srcKind && !!t.fileId && ((S.settings.files||{})[t.fileId]||{}).kind==='credit');
+const isCardChargeRow = t => t.type==='expense' && (!!t.cardCharge || (t.srcKind==='bank' && CARD_CO_RE.test(t.desc)));
+function stmtKeyOf(t){ const f=(S.settings.files||{})[t.fileId]; const hasC=f && ((f.map && (f.map.chargeCol??-1)>-1) || f.chargeDate); return (t.fileId||('card:'+(t.card||''))) + '|' + (hasC ? (t.chargeDate||t.date).slice(0,7) : '*'); }
+const digitsOf = s => (String(s||'').match(/\d{4}(?!.*\d{4})/)||[])[0] || '';
+// the credit card a bank charge belongs to: set by the user on the row, or 4 digits in the description
+const chargeCardDigits = t => t.forCard ? digitsOf(cardName(t.forCard)) : digitsOf(t.desc);
+function buildIdx(){
+  const all=allTx(), stm={};
+  all.forEach(t=>{ if(!isCreditRow(t) || t.excluded) return; const k=stmtKeyOf(t);
+    const s=(stm[k] ||= {key:k, fileId:t.fileId, card:t.card, sum:0, n:0, maxMonth:''});
+    s.sum += t.type==='expense'?t.amount:-t.amount; s.n++; const cm=(t.chargeDate||t.date).slice(0,7); if(cm>s.maxMonth) s.maxMonth=cm; });
+  Object.values(stm).forEach(s=>{ s.month = s.key.endsWith('|*') ? s.maxMonth : s.key.split('|').pop(); s.sum=Math.round(s.sum*100)/100; });
+  const charges=all.filter(isCardChargeRow).sort((a,b)=>a.date.localeCompare(b.date));
+  const linkOf={}, stmtTo={};
+  charges.forEach(c=>{ if(c.link && c.link!=='none' && stm[c.link] && !stmtTo[c.link]){ linkOf[c.id]=c.link; stmtTo[c.link]=c.id; } });
+  charges.forEach(c=>{
+    if (c.link || linkOf[c.id]) return;
+    const cm=c.date.slice(0,7), cd=chargeCardDigits(c); let best=null, bd=Infinity;
+    Object.values(stm).forEach(s=>{ if(stmtTo[s.key] || Math.abs(mDiff(cm,s.month))>1) return;
+      const sd=digitsOf(s.card?cardName(s.card):''); if(cd && sd && cd!==sd) return;   // different card: never link
+      const d=Math.abs(s.sum-c.amount); if(d>Math.max(2,Math.abs(s.sum)*0.01)) return;
+      let score=d; if(cd && sd && cd===sd) score-=1000; if(score<bd){ bd=score; best=s; } });
+    if (best){ linkOf[c.id]=best.key; stmtTo[best.key]=c.id; }
+  });
+  const byId=new Map(all.map(t=>[t.id,t]));
+  IDX={ver:dataVer, stm, linkOf, stmtTo, byId, charges, hasBank: all.some(t=>t.srcKind==='bank'), byMonth:{charge:{},deal:{}}};
+  all.forEach(t=>{ ['charge','deal'].forEach(b=>{ const m=repMonth(t,b); (IDX.byMonth[b][m] ||= []).push(t); }); });
+}
+function idx(){ if(!IDX || IDX.ver!==dataVer) buildIdx(); return IDX; }
+function linkedChargeOf(t){ if(!isCreditRow(t)) return null; const I=IDX&&IDX.ver===dataVer?IDX:idx(); const bid=I.stmtTo[stmtKeyOf(t)]; return bid ? I.byId.get(bid) : null; }
+function chargeLinked(t){ return !!idx().linkOf[t.id]; }
+function salaryShifted(t){ const s=S.settings.salaryShift||{}; return s.on!==false && t.type==='income' && t.catId==='salary' && +t.date.slice(8,10) >= (s.day||26); }
+function effDate(t, basis){ if (basis==='deal') return t.purchaseDate || t.date; const lc=linkedChargeOf(t); return lc ? lc.date : (t.chargeDate || t.date); }
+function repDate(t, basis){ return salaryShifted(t) ? shiftMonth(t.date.slice(0,7),1)+'-01' : effDate(t,basis); }
+function repMonth(t, basis){ return repDate(t,basis).slice(0,7); }
+const monthTx = (k, basis=S.basis||'charge') => (idx().byMonth[basis][k]||[]);
+function periodTx(basis=S.basis||'charge'){
+  const list = !S.range ? monthTx(S.month,basis).slice() : allTx().filter(t=>{ const d=repDate(t,basis); return d>=S.range.from && d<=S.range.to; });
+  return list.sort((x,y)=>effDate(y,basis).localeCompare(effDate(x,basis)));
 }
 const fmtD = d => d.split('-').reverse().join('/');
 const periodLabel = () => S.range ? fmtD(S.range.from)+' – '+fmtD(S.range.to) : monthLabel(S.month);
@@ -566,7 +719,7 @@ function goMonth(k){ S.month=k; S.range=null; }
 
 function learnedCat(desc, type){
   const learned = S.settings.learned||{};
-  for (const k of [norm(desc), stripInst(desc)]) if (learned[k] && cats().some(c=>c.id===learned[k] && (!type || c.kind===type))) return learned[k];
+  for (const k of [norm(desc), stripInst(desc)]) if (learned[k] && cats().some(c=>c.id===learned[k])) return learned[k];
   return null;
 }
 function kwCat(desc, type){
@@ -611,7 +764,9 @@ function defaultBranchCat(branch){
   for (const [re,id] of BRANCH_RULES) if (re.test(b) && cats().some(c=>c.id===id)) return id;
   return null;
 }
-function importCat(desc, type, branch){
+function importCat(desc, type, branch, kind){
+  // money back on a card statement is a refund of an expense, not income
+  if (type==='income' && kind==='credit') return learnedCat(desc) || branchCat(branch) || kwCat(desc,'expense') || defaultBranchCat(branch) || 'uncat';
   return learnedCat(desc,type) || (type==='expense' && branchCat(branch)) || kwCat(desc,type) || (type==='expense' && defaultBranchCat(branch)) || (type==='income' ? 'extra_inc' : 'uncat');
 }
 function autoCat(desc, type){
@@ -626,25 +781,29 @@ function autoCat(desc, type){
 }
 
 function totals(list){
-  const r = {inc:0, exp:0, essential:0, important:0, optional:0, byCat:{}, byTopic:{}, byCard:{}};
+  const r = {inc:0, exp:0, essential:0, important:0, optional:0, byCat:{}, byTopic:{}, byCard:{}, byInc:{}, refunds:0};
   for (const t of list){
     if (t.excluded) continue;
-    if (t.type==='income'){ r.inc+=t.amount; continue; }
-    r.exp+=t.amount; r[necOf(t)] += t.amount;
-    const ck=t.card||''; r.byCard[ck]=(r.byCard[ck]||0)+t.amount;
-    r.byCat[t.catId]=(r.byCat[t.catId]||0)+t.amount;
-    const tp = catById(t.catId).topic; r.byTopic[tp]=(r.byTopic[tp]||0)+t.amount;
+    if (isCardChargeRow(t) && chargeLinked(t)) continue;   // its card statement is counted instead
+    if (effKind(t)==='income'){ r.inc+=t.amount; r.byInc[t.catId]=(r.byInc[t.catId]||0)+t.amount; continue; }
+    const v = t.type==='income' ? -t.amount : t.amount;   // a refund lowers its expense category
+    r.exp+=v; r[necOf(t)] += v; if (v<0) r.refunds-=v;
+    const ck=t.card||''; r.byCard[ck]=(r.byCard[ck]||0)+v;
+    r.byCat[t.catId]=(r.byCat[t.catId]||0)+v;
+    const tp = catById(t.catId).topic; r.byTopic[tp]=(r.byTopic[tp]||0)+v;
   }
   return r;
 }
 
 /* ================= mutations ================= */
 function addTx(list){
+  bump();
   const touched = new Set();
   for (const t of list){ const k=t.date.slice(0,7); (S.months[k] ||= []).push(t); touched.add(k); }
   touched.forEach(k=>{ S.months[k].sort((a,b)=>b.date.localeCompare(a.date)); Store.saveMonth(k); });
 }
 function removeTx(id){
+  bump();
   for (const k in S.months){ const i=S.months[k].findIndex(t=>t.id===id); if(i>-1){ const [t]=S.months[k].splice(i,1); Store.saveMonth(k); return t; } }
 }
 function updateTx(id, patch){
@@ -681,6 +840,7 @@ function ensureCard(name){
 /* ================= month selector ================= */
 const mSel=document.getElementById('mSel');
 function renderMonthSel(){
+  document.querySelectorAll('#basisSeg [data-gb]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.gb===(S.basis||'charge'))));
   document.querySelectorAll('#pmSeg [data-pm]').forEach(b=>b.setAttribute('aria-pressed', String((b.dataset.pm==='range')===!!S.range)));
   document.getElementById('monthCtl').hidden=!!S.range; document.getElementById('rangeCtl').hidden=!S.range;
   if (S.range){ document.getElementById('rFrom').value=S.range.from; document.getElementById('rTo').value=S.range.to; }
@@ -689,6 +849,7 @@ function renderMonthSel(){
   mSel.innerHTML = sorted.map(k=>`<option value="${k}" ${k===S.month?'selected':''}>${monthLabel(k)}${S.months[k]?.length?'':' (ריק)'}</option>`).join('');
 }
 mSel.onchange = ()=>{ goMonth(mSel.value); render(); };
+document.querySelectorAll('#basisSeg [data-gb]').forEach(b=>b.onclick=()=>{ S.basis=b.dataset.gb; render(); toast(S.basis==='charge'?'תצוגת תזרים: לפי מועדי החיוב בחשבון':'תצוגת עסקאות: לפי מועד ביצוע העסקה'); });
 function presetRange(v){
   const t=todayISO(), y=+t.slice(0,4), cm=t.slice(0,7), keys=monthKeys();
   const lastDay = k => { const [yy,mm]=k.split('-').map(Number); return k+'-'+String(new Date(yy,mm,0).getDate()).padStart(2,'0'); };
@@ -714,10 +875,11 @@ document.getElementById('mNext').onclick=()=>{ goMonth(shiftMonth(S.month,1)); r
 document.querySelectorAll('nav [data-tab]').forEach(b=>b.onclick=()=>{ S.tab=b.dataset.tab; document.getElementById('moreMenu').hidden=true; render(); window.scrollTo({top:0}); });
 document.getElementById('moreBtn').onclick=e=>{ e.stopPropagation(); const m=document.getElementById('moreMenu'); m.hidden=!m.hidden; };
 document.addEventListener('click',e=>{ const m=document.getElementById('moreMenu'); if(!m.hidden && !m.contains(e.target)) m.hidden=true; });
-document.querySelectorAll('#moreMenu [data-go]').forEach(b=>b.onclick=()=>{ document.getElementById('moreMenu').hidden=true; if(b.dataset.go==='drive'){ document.getElementById('gBtn').click(); return; } S.tab=b.dataset.go; render(); window.scrollTo({top:0}); });
+document.querySelectorAll('#moreMenu [data-go]').forEach(b=>b.onclick=()=>{ document.getElementById('moreMenu').hidden=true; if(b.dataset.go==='lock'){ lockNow(); return; } if(b.dataset.go==='drive'){ document.getElementById('gBtn').click(); return; } S.tab=b.dataset.go; render(); window.scrollTo({top:0}); });
 
 /* ================= render ================= */
 function render(){
+  bump();
   renderMonthSel();
   document.querySelectorAll('nav [data-tab]').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.tab===S.tab)));
   document.getElementById('moreBtn').setAttribute('aria-selected', String(['inst','import','cats'].includes(S.tab)));
@@ -731,7 +893,43 @@ function prevPeriodTx(){
   const days=Math.round((new Date(S.range.to)-new Date(S.range.from))/864e5)+1;
   const pTo=new Date(new Date(S.range.from).getTime()-864e5), pFrom=new Date(pTo.getTime()-(days-1)*864e5);
   const pf=pFrom.toISOString().slice(0,10), pt=pTo.toISOString().slice(0,10);
-  return allTx().filter(t=>t.date>=pf && t.date<=pt);
+  return allTx().filter(t=>{ const d=repDate(t,S.basis||'charge'); return d>=pf && d<=pt; });
+}
+function unlinkedInfo(list){
+  const I=idx(), charges=list.filter(t=>isCardChargeRow(t) && !t.excluded && !I.linkOf[t.id]);
+  const months=new Set(S.range? periodMonths() : [S.month]);
+  const stms=Object.values(I.stm).filter(s=>!I.stmtTo[s.key] && (s.key.endsWith('|*') ? months.has(shiftMonth(s.month,1)) : months.has(s.month)));
+  return {charges, stms};
+}
+function linkPanelHTML(list){
+  const {charges, stms}=unlinkedInfo(list), I=idx();
+  const linkedN=list.filter(t=>isCardChargeRow(t) && I.linkOf[t.id]).length;
+  const noCard=list.filter(t=>isCardChargeRow(t) && !t.excluded && !chargeCardDigits(t));
+  const noCardHTML = noCard.length ? `<div class="panel" style="margin-bottom:18px;border-color:var(--imp)">💳 <strong>${noCard.length} חיובי כרטיס בבנק בלי מספר כרטיס.</strong> ציון הכרטיס בשורה מאפשר לקשר את החיוב לקובץ הפירוט הנכון. <button class="btn small" data-act="nocard">להוספת מספרי כרטיס</button></div>` : '';
+  if (!charges.length && !(stms.length && I.hasBank)) return noCardHTML + (linkedN?`<p class="muted" style="margin:-4px 0 14px;font-size:.88rem">🔗 ${linkedN} חיובי כרטיס בבנק מקושרים לקובצי פירוט, והעסקאות שבהם מוצגות במקומם.</p>`:'');
+  return noCardHTML + `<div class="panel" style="margin-bottom:18px;border-color:var(--imp)">⚠️ <strong>קישור חיובי אשראי:</strong>
+    ${charges.length?`${charges.length} חיובי כרטיס בחשבון הבנק (${fmt(charges.reduce((a,t)=>a+t.amount,0))}) בלי קובץ פירוט מקושר. הם נספרים כ"חיוב כרטיס אשראי (ללא פירוט)". `:''}
+    ${stms.length && I.hasBank?`${stms.length} קובצי פירוט שלא נמצא להם חיוב תואם בבנק. `:''}
+    <button class="btn small" data-act="unlinked">לבדיקה וקישור</button></div>`;
+}
+function statusHTML(T){
+  const net=T.inc-T.exp, rate=T.inc? Math.round(net/T.inc*100) : (T.exp? -100 : 0);
+  const tone = rate>=10 ? 'tone-good' : rate>=0 ? 'tone-mid' : 'tone-bad';
+  const word = !T.inc && !T.exp ? 'אין נתונים' : rate>=20 ? 'מצוין' : rate>=10 ? 'טוב' : rate>=0 ? 'גבולי' : 'חריגה';
+  const icon = rate>=10 ? '✓' : '!';
+  const optShare = T.exp ? Math.round(T.optional/T.exp*100) : 0;
+  const tip = !T.inc && !T.exp ? 'עוד אין תנועות בתקופה הזו.'
+    : rate<0 ? `יצאו ${fmt(-net)} יותר ממה שנכנס. כדאי לבדוק את הוצאות הרשות (${optShare}% מההוצאות).`
+    : rate<10 ? `נשארו ${fmt(net)}. יש מקום לצמצם, בעיקר בהוצאות רשות (${optShare}%).`
+    : `נשארו ${fmt(net)} מתוך ${fmt(T.inc)}. ככה ממשיכים.`;
+  const pctRing=Math.max(0,Math.min(100,rate)), C=2*Math.PI*58;
+  const wave=`<svg class="wave" viewBox="0 0 400 22" preserveAspectRatio="none" aria-hidden="true"><path d="M0 11 C 40 0, 80 22, 120 11 S 200 0, 240 11 S 320 22, 360 11 S 400 4, 400 11" fill="none" stroke="var(--tone)" stroke-width="2.5" opacity=".55"/></svg>`;
+  return `<div class="status-hero ${tone}">
+    <div class="sh-card sh-ring">${wave}<span class="sh-pill">${S.range?'בתקופה':monthName(S.month)}</span>
+      <div class="ring"><svg viewBox="0 0 132 132"><circle cx="66" cy="66" r="58" fill="none" stroke="color-mix(in srgb,var(--tone) 20%,transparent)" stroke-width="10"/><circle cx="66" cy="66" r="58" fill="none" stroke="var(--tone)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C*pctRing/100} ${C}"/></svg>
+        <div class="ring-in"><b>${T.inc?rate:'—'}${T.inc?'<span style="font-size:.5em">%</span>':''}</b><small>חיסכון</small></div></div></div>
+    <div class="sh-card sh-verdict">${wave}<div class="verdict"><i aria-hidden="true">${icon}</i><span>${word}</span></div><div class="bubble">${tip}</div></div>
+  </div>`;
 }
 function kpiHTML(T){
   const P=totals(prevPeriodTx()), hasP=P.inc||P.exp, net=T.inc-T.exp, pnet=P.inc-P.exp;
@@ -759,11 +957,11 @@ function renderOverview(){
     bindCommon(); return;
   }
   const pct = v => T.exp? (v/T.exp*100):0;
-  const topics = Object.entries(T.byTopic).sort((a,b)=>b[1]-a[1]);
+  const topics = Object.entries(T.byTopic).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   const maxTopic = topics[0]?.[1]||1;
   // topic bars split by necessity
   const topicNec = {};
-  list.filter(t=>t.type==='expense').forEach(t=>{ const tp=catById(t.catId).topic; const n=necOf(t); (topicNec[tp] ||= {essential:0,important:0,optional:0})[n]+=t.amount; });
+  list.filter(t=>effKind(t)==='expense' && !t.excluded && !(isCardChargeRow(t) && chargeLinked(t))).forEach(t=>{ const tp=catById(t.catId).topic; const n=necOf(t); (topicNec[tp] ||= {essential:0,important:0,optional:0})[n]+=t.amount; });
   const uncatCount = list.filter(t=>t.catId==='uncat' && !t.excluded).length;
   const excl = list.filter(t=>t.excluded);
   const over = cats().filter(c=>c.budget>0 && (T.byCat[c.id]||0)>c.budget*(S.range?nPM:1));
@@ -772,9 +970,11 @@ function renderOverview(){
   if (cardRows.length===1 && cardRows[0][0]==='') cardRows.length=0;
 
   app.innerHTML = `
+  ${statusHTML(T)}
   ${kpiHTML(T)}
+  <p class="muted" style="margin:-6px 0 14px;font-size:.84rem">${(S.basis||'charge')==='charge'?'<strong>תזרים לפי מועדי החיוב:</strong> תנועות החשבון וחיובי הכרטיסים לפי התאריך שבו ירדו מהחשבון. חיובי כרטיס מקושרים מפורטים לפי העסקאות שבהם':'<strong>לפי מועד העסקה:</strong> כל עסקה נספרת בחודש שבו בוצעה, גם אם חויבה בחשבון בחודש אחר. כך רואים כמה כסף יצא ונכנס בכל חודש בפועל'}${(S.settings.salaryShift||{}).on!==false?`, ומשכורת שנכנסת מה-${(S.settings.salaryShift||{}).day||26} בחודש נספרת בחודש הבא`:''}.</p>
   <div class="hero panel">
-    <p class="hero-line">${periodPhrase()} נכנסו <b class="inc">${fmt(T.inc)}</b> ויצאו <b class="exp">${fmt(T.exp)}</b>.</p>
+    <h2 style="margin-bottom:4px">לאן הולכות ההוצאות</h2>
     ${instNow?`<div class="muted" style="margin-top:4px">${fmt(instNow)} מההוצאות ${periodWord()} הם תשלומים על עסקאות בתשלומים. בחודש שאחרי כבר מחויבים ${fmt(nextLoad())}. <button class="btn ghost small" data-act="goinst">לפירוט התשלומים</button></div>`:''}
     <div class="hero-net muted">${net>=0?`נשארו לכם <strong style="color:var(--inc)">${fmt(net)}</strong>${T.inc?` (${Math.round(net/T.inc*100)}% מההכנסה)`:''}.`:`ההוצאות עברו את ההכנסות ב-<strong style="color:var(--exp)">${fmt(-net)}</strong>.`}</div>
     ${S.range && nPM>=1.5?`<div class="muted" style="margin-top:4px">ממוצע לחודש: הכנסות ${fmt(T.inc/nPM)}, הוצאות ${fmt(T.exp/nPM)}.</div>`:''}
@@ -790,10 +990,14 @@ function renderOverview(){
     </div>
   </div>
   ${excl.length?`<p class="muted" style="margin:-8px 0 16px">${excl.length} תנועות (${fmt(excl.reduce((a,t)=>a+t.amount,0))}) לא נכללות בדוחות ${periodWord()}. <button class="btn ghost small" data-act="excl">להצגה</button></p>`:''}
+  ${linkPanelHTML(list)}
   ${uncatCount||over.length?`<div class="panel" style="margin-bottom:18px;border-color:var(--imp)">
      ${uncatCount?`<div>יש <strong>${uncatCount}</strong> תנועות לא מסווגות. <button class="btn small" data-act="uncat">לסווג עכשיו</button></div>`:''}
      ${over.length?`<div style="margin-top:${uncatCount?8:0}px">חריגה מתקציב: ${over.map(c=>`<strong>${esc(c.name)}</strong> (${fmt(T.byCat[c.id])} מתוך ${fmt(c.budget*(S.range?nPM:1))})`).join(', ')}</div>`:''}
   </div>`:''}
+  ${Object.keys(T.byInc).length?`<div class="panel" style="margin-bottom:18px"><h2>מקורות הכנסה</h2>
+    <ul class="hbars">${Object.entries(T.byInc).sort((a,b)=>b[1]-a[1]).map(([id,v])=>`<li data-inccat="${id}" tabindex="0"><span>${esc(catById(id).name)}</span><span class="hb-track" style="width:${Math.max(4,v/Math.max(...Object.values(T.byInc))*100)}%"><span style="width:100%;background:var(--inc)"></span></span><span class="hb-val" style="color:var(--inc)">${fmt(v)}</span></li>`).join('')}</ul>
+    ${T.refunds?`<p class="muted" style="margin:8px 0 0;font-size:.86rem">זיכויים והחזרים של ${fmt(T.refunds)} הופחתו מההוצאות ולא נספרו כהכנסה.</p>`:''}</div>`:''}
   <div class="grid2">
     <div class="panel">
       <h2>לאן הלך הכסף</h2>
@@ -817,12 +1021,13 @@ function renderOverview(){
     </div>`:''}
   </div>`;
   app.querySelectorAll('[data-card]').forEach(li=>{ const go=()=>{ S.filters={q:'',type:'expense',nec:'',cat:'',topic:'',card:li.dataset.card}; S.tab='tx'; render(); }; li.onclick=go; li.onkeydown=e=>{ if(e.key==='Enter') go(); }; });
+  app.querySelectorAll('[data-inccat]').forEach(li=>{ const go=()=>{ S.filters={q:'',type:'',nec:'',cat:li.dataset.inccat,topic:''}; S.tab='tx'; render(); }; li.onclick=go; li.onkeydown=e=>{ if(e.key==='Enter') go(); }; });
   app.querySelectorAll('[data-topic]').forEach(li=>{ const go=()=>{ S.filters={q:'',type:'',nec:'',cat:'',topic:li.dataset.topic}; S.tab='tx'; render(); }; li.onclick=go; li.onkeydown=e=>{ if(e.key==='Enter') go(); }; });
   bindCommon();
 }
 function trendSVG(){
   let ks=[]; if (S.range){ ks=periodMonths().slice(-24); if(ks.length<2) ks=[shiftMonth(ks[0],-1),ks[0]]; } else for(let i=5;i>=0;i--) ks.push(shiftMonth(S.month,-i));
-  const data = ks.map(k=>{ const T=totals(S.range?monthTx(k).filter(t=>inRange(t.date)):monthTx(k)); return {k, inc:T.inc, exp:T.exp}; });
+  const data = ks.map(k=>{ const T=totals(S.range?monthTx(k).filter(t=>inRange(repDate(t,S.basis||'charge'))):monthTx(k)); return {k, inc:T.inc, exp:T.exp}; });
   const max = Math.max(1,...data.map(d=>Math.max(d.inc,d.exp)));
   const W=520,H=220,pad=24,gw=(W-pad*2)/ks.length,bw=Math.max(3,Math.min(22,gw/2-3)), hl=S.range?null:S.month;
   let s=`<svg viewBox="0 0 ${W} ${H+28}" role="img" aria-label="הכנסות והוצאות לפי חודש">`;
@@ -841,20 +1046,23 @@ function trendSVG(){
 
 /* ---------- transactions ---------- */
 function renderTx(){
-  const f=S.filters, q=norm(f.q);
-  let list = periodTx().filter(t=>
+  const f=S.filters, q=norm(f.q), basis=S.basis||'charge', I=idx();
+  const isUnlinked=t=> (isCardChargeRow(t) && !t.excluded && !I.linkOf[t.id]) || (I.hasBank && isCreditRow(t) && !t.excluded && !linkedChargeOf(t));
+  let list = periodTx(basis).filter(t=>
     (!q || norm(t.desc).includes(q) || norm(t.note).includes(q)) &&
-    (!f.type || (f.type==='inst' ? !!t.inst : f.type==='excluded' ? !!t.excluded : f.type==='included' ? !t.excluded : t.type===f.type)) &&
+    (!f.type || (f.type==='inst' ? !!t.inst : f.type==='excluded' ? !!t.excluded : f.type==='included' ? !t.excluded : f.type==='unlinked' ? isUnlinked(t) : f.type==='cardcharge' ? isCardChargeRow(t) : f.type==='nocard' ? (isCardChargeRow(t) && !chargeCardDigits(t)) : f.type==='refund' ? isRefund(t) : effKind(t)===f.type)) &&
     (!f.nec || necOf(t)===f.nec) &&
     (!f.cat || t.catId===f.cat) &&
     (!f.card || (f.card==='__none' ? !t.card : t.card===f.card)) &&
     (!f.topic || (t.type==='expense' && catById(t.catId).topic===f.topic)));
-  const sum = list.reduce((a,t)=>a+(t.excluded?0:(t.type==='income'?t.amount:-t.amount)),0);
+  const sum = list.reduce((a,t)=>a+((t.excluded || (isCardChargeRow(t) && I.linkOf[t.id]))?0:(t.type==='income'?t.amount:-t.amount)),0);
+  const incSum = list.reduce((a,t)=>a+((!t.excluded && effKind(t)==='income')?t.amount:0),0);
   const topics=[...new Set(cats().map(c=>c.topic))];
   app.innerHTML = `
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><span class="muted" style="font-size:.88rem">הצגה לפי:</span><div class="seg" role="group" aria-label="בסיס תאריכים"><button type="button" data-basis="charge" aria-pressed="${basis==='charge'}">מועד חיוב</button><button type="button" data-basis="deal" aria-pressed="${basis==='deal'}">מועד עסקה</button></div></div>
   <div class="filters">
     <input type="search" id="fq" placeholder="חיפוש לפי תיאור" value="${esc(f.q)}" aria-label="חיפוש">
-    <select id="ft" aria-label="סוג"><option value="">הכנסות והוצאות</option><option value="expense" ${f.type==='expense'?'selected':''}>הוצאות</option><option value="income" ${f.type==='income'?'selected':''}>הכנסות</option><option value="inst" ${f.type==='inst'?'selected':''}>חיובים בתשלומים</option><option value="excluded" ${f.type==='excluded'?'selected':''}>לא נכללות בדוחות</option></select>
+    <select id="ft" aria-label="סוג"><option value="">הכנסות והוצאות</option><option value="expense" ${f.type==='expense'?'selected':''}>הוצאות</option><option value="income" ${f.type==='income'?'selected':''}>הכנסות</option><option value="refund" ${f.type==='refund'?'selected':''}>זיכויים והחזרים</option><option value="inst" ${f.type==='inst'?'selected':''}>חיובים בתשלומים</option><option value="excluded" ${f.type==='excluded'?'selected':''}>לא נכללות בדוחות</option><option value="cardcharge" ${f.type==='cardcharge'?'selected':''}>חיובי כרטיס בבנק</option><option value="unlinked" ${f.type==='unlinked'?'selected':''}>⚠️ לא מקושרות</option><option value="nocard" ${f.type==='nocard'?'selected':''}>⚠️ חיובי כרטיס בלי מספר כרטיס</option></select>
     <select id="fn" aria-label="רמת הכרח"><option value="">כל רמות ההכרח</option>${Object.entries(NEC).map(([k,n])=>`<option value="${k}" ${f.nec===k?'selected':''}>${n.label}</option>`).join('')}</select>
     <select id="ftp" aria-label="נושא"><option value="">כל הנושאים</option>${topics.map(tp=>`<option ${f.topic===tp?'selected':''}>${esc(tp)}</option>`).join('')}</select>
     <select id="fc" aria-label="קטגוריה"><option value="">כל הקטגוריות</option>${catOptions('',f.cat)}</select>
@@ -865,12 +1073,12 @@ function renderTx(){
   ${list.length?`<div class="table-wrap"><table class="tx-table">
     <thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th>הכרח</th><th>כרטיס</th><th style="text-align:center">בדוחות</th><th style="text-align:left">סכום</th><th><span class="sr" style="position:absolute;left:-9999px">פעולות</span></th></tr></thead>
     <tbody>${list.map(t=>`<tr data-id="${t.id}" class="${t.catId==='uncat'?'uncat':''} ${t.excluded?'is-excl':''}">
-      <td class="td-date" style="white-space:nowrap">${t.date.split('-').reverse().join('/')}</td>
-      <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
+      <td class="td-date" style="white-space:nowrap">${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?`<div class="muted" style="font-size:.76rem">${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}</div>`:''; })()}</td>
+      <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${salaryShifted(t)?`<span class="inst-tag">נספרת ב${monthName(repMonth(t,'charge'))}</span>`:''}${linkTagHTML(t)}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
       <td class="td-cat"><button class="cat-btn ${t.catId==='uncat'?'is-uncat':''}" data-cat>${esc(catById(t.catId).name)} ▾</button></td>
       <td class="td-meta"><span>${t.date.split('-').reverse().join('/')}</span>${t.card?`<span>💳 ${esc(cardName(t.card))}</span>`:''}<label class="chk" style="font-weight:400"><input type="checkbox" data-incl2 ${t.excluded?'':'checked'}> בדוחות</label></td>
-      <td class="td-nec"><select data-nec aria-label="רמת הכרח" ${t.type==='income'?'disabled':''} style="max-width:110px">
-        ${t.type==='income'?'<option>הכנסה</option>':`<option value="">${NEC[catById(t.catId).nec].label}</option>`+Object.entries(NEC).map(([k,n])=>`<option value="${k}" ${t.nec===k?'selected':''}>${n.label}</option>`).join('')}
+      <td class="td-nec"><select data-nec aria-label="רמת הכרח" ${effKind(t)==='income'?'disabled':''} style="max-width:110px">
+        ${effKind(t)==='income'?'<option>הכנסה</option>':isRefund(t)?'<option>זיכוי</option>':`<option value="">${NEC[catById(t.catId).nec].label}</option>`+Object.entries(NEC).map(([k,n])=>`<option value="${k}" ${t.nec===k?'selected':''}>${n.label}</option>`).join('')}
       </select></td>
       <td class="td-card"><select data-card aria-label="כרטיס" style="max-width:140px">${cardOptions(t.card,{allowNew:false})}</select></td>
       <td class="td-incl" style="text-align:center"><input type="checkbox" data-incl ${t.excluded?'':'checked'} aria-label="לכלול בדוחות" title="לכלול בדוחות"></td>
@@ -881,6 +1089,7 @@ function renderTx(){
 
   const set = (k,v)=>{ S.filters[k]=v; renderTx(); };
   const fq=app.querySelector('#fq'); fq.oninput=()=>{ S.filters.q=fq.value; clearTimeout(fq._t); fq._t=setTimeout(()=>{ const pos=fq.selectionStart; renderTx(); const n=app.querySelector('#fq'); n.focus(); n.setSelectionRange(pos,pos); },250); };
+  app.querySelectorAll('[data-basis]').forEach(b=>b.onclick=()=>{ S.basis=b.dataset.basis; render(); });
   app.querySelector('#ft').onchange=e=>set('type',e.target.value);
   app.querySelector('#fn').onchange=e=>set('nec',e.target.value);
   app.querySelector('#ftp').onchange=e=>set('topic',e.target.value);
@@ -894,6 +1103,8 @@ function renderTx(){
     tr.querySelector('[data-card]').onchange=e=>{ updateTx(id,{card:e.target.value||null}); toast('נשמר'); };
     const ns=tr.querySelector('[data-nec]'); if(ns) ns.onchange=e=>{ updateTx(id,{nec:e.target.value||null}); renderTx(); };
     tr.querySelector('[data-cat2]').onclick=()=>pickForTx([t]);
+    tr.querySelector('[data-link]')?.addEventListener('click',()=>openLinkPicker(t));
+    tr.querySelector('[data-fcard]')?.addEventListener('click',()=>openCardPicker(t));
     tr.querySelector('[data-incl]').onchange=e=>setIncluded([t], e.target.checked);
     tr.querySelector('[data-incl2]').onchange=e=>setIncluded([t], e.target.checked);
     tr.querySelector('[data-hist]').onclick=()=>openMerchant(t.desc,t.type);
@@ -902,18 +1113,81 @@ function renderTx(){
   });
 }
 function setIncluded(txs, inc){
-  txs.forEach(t=>updateTx(t.id,{excluded:!inc}));
+  txs.forEach(t=>updateTx(t.id,{excluded:!inc, exclManual:true}));
   render(); if (document.getElementById('merchDlg').open) renderMerch();
   toast(inc?'התנועה נכללת בדוחות':'התנועה לא תיכלל בדוחות ובסיכומים',[{label:'ביטול',fn:()=>{ txs.forEach(t=>updateTx(t.id,{excluded:inc})); render(); if (document.getElementById('merchDlg').open) renderMerch(); }}]);
 }
+function linkTagHTML(t){
+  const I=idx();
+  if (isCardChargeRow(t)){
+    const k=I.linkOf[t.id], s=k&&I.stm[k], f=s&&(S.settings.files||{})[s.fileId], cd=chargeCardDigits(t);
+    const cardTag = cd ? `<button class="link-tag ok" data-fcard title="שינוי הכרטיס">💳 כרטיס ${cd}</button> ` : `<button class="link-tag warn" data-fcard>⚠️ לא צוין מספר כרטיס · הוספה</button> `;
+    return k ? `<div style="font-size:.8rem;margin-top:2px;display:flex;gap:4px;flex-wrap:wrap">${cardTag}<button class="link-tag ok" data-link>🔗 פירוט: ${esc(f?f.name:(s.card?cardName(s.card):'כרטיס'))} · ${s.n} עסקאות · לא נספר בנפרד</button></div>`
+             : `<div style="font-size:.8rem;margin-top:2px;display:flex;gap:4px;flex-wrap:wrap">${cardTag}<button class="link-tag warn" data-link>⚠️ אין קובץ פירוט מקושר · קישור</button></div>`;
+  }
+  if (isCreditRow(t) && I.hasBank){
+    const lc=linkedChargeOf(t);
+    return lc ? `<div style="font-size:.8rem;margin-top:2px"><span class="link-tag ok">🔗 חויב בבנק ${fmtD(lc.date)}</span></div>` : `<div style="font-size:.8rem;margin-top:2px"><span class="link-tag warn">⚠️ לא מקושר לחיוב בבנק</span></div>`;
+  }
+  return '';
+}
+function openCardPicker(t){
+  const I=idx();
+  const used=new Set(Object.values(I.stm).map(s=>s.card).filter(Boolean));
+  const cardsOpt=cardsList().filter(c=>digitsOf(c.name)).sort((a,b)=>(used.has(b.id)?1:0)-(used.has(a.id)?1:0));
+  const same=allTx().filter(x=>x.id!==t.id && isCardChargeRow(x) && norm(x.desc)===norm(t.desc) && !chargeCardDigits(x));
+  let d=document.getElementById('cardDlg'); if(!d){ d=document.createElement('dialog'); d.id='cardDlg'; document.body.appendChild(d); }
+  d.innerHTML=`<form method="dialog"><h2>לאיזה כרטיס שייך החיוב?</h2>
+    <p class="muted" style="margin-top:0">${esc(t.desc)} · ${fmtD(t.date)} · <strong>${fmt2(t.amount)}</strong></p>
+    <p style="font-size:.9rem;margin:0 0 12px">בשורה בבנק לא מופיע מספר הכרטיס. בחירה כאן תאפשר לקשר את החיוב לקובץ הפירוט הנכון.</p>
+    <div class="field"><label for="fcSel">כרטיס</label><select id="fcSel">
+      <option value="">בחרו כרטיס…</option>
+      ${cardsOpt.map(c=>`<option value="${c.id}" ${t.forCard===c.id?'selected':''}>${esc(c.name)}${used.has(c.id)?' · יש קובצי פירוט':''}</option>`).join('')}
+      <option value="__new">מספר כרטיס אחר…</option>
+      ${t.forCard?'<option value="__clear">הסרת הכרטיס מהשורה</option>':''}
+    </select></div>
+    <div class="field" id="fcNewWrap" hidden style="margin-top:10px"><label for="fcNew">4 ספרות אחרונות של הכרטיס</label><input id="fcNew" inputmode="numeric" maxlength="4" pattern="\\d{4}" dir="ltr" placeholder="1234"></div>
+    ${same.length?`<label class="chk" style="font-weight:400;margin-top:12px"><input type="checkbox" id="fcAll"> להחיל גם על ${same.length} חיובים נוספים בשם "${esc(t.desc)}" שחסר בהם מספר כרטיס</label>`:''}
+    <div class="dlg-actions"><button class="btn primary" value="save">שמירה</button><button class="btn ghost" value="cancel" formnovalidate>ביטול</button></div></form>`;
+  const sel=d.querySelector('#fcSel'); sel.onchange=()=>{ d.querySelector('#fcNewWrap').hidden=sel.value!=='__new'; if(sel.value==='__new') d.querySelector('#fcNew').focus(); };
+  d.querySelector('form').addEventListener('submit',e=>{
+    if (e.submitter && e.submitter.value==='cancel') return;
+    let v=sel.value;
+    if (v==='__new'){ const dg=d.querySelector('#fcNew').value.trim(); if(!/^\d{4}$/.test(dg)){ e.preventDefault(); toast('הקלידו 4 ספרות'); return; } v=ensureCard('כרטיס '+dg); }
+    if (!v){ e.preventDefault(); toast('בחרו כרטיס'); return; }
+    const val = v==='__clear' ? undefined : v;
+    const rows=[t].concat(d.querySelector('#fcAll')?.checked ? same : []);
+    rows.forEach(x=>updateTx(x.id,{forCard:val, link: x.link==='none'?'none':undefined}));
+    render(); toast(val?`הכרטיס נשמר${rows.length>1?` ב-${rows.length} חיובים`:''}. הקישור לפירוט עודכן.`:'הכרטיס הוסר מהשורה');
+  });
+  d.showModal();
+}
+function openLinkPicker(t){
+  const I=idx(), cur=I.linkOf[t.id]||'';
+  const cand=Object.values(I.stm).filter(s=>(!I.stmtTo[s.key] || s.key===cur) && Math.abs(mDiff(t.date.slice(0,7),s.month))<=2)
+    .sort((a,b)=>Math.abs(a.sum-t.amount)-Math.abs(b.sum-t.amount));
+  let d=document.getElementById('linkDlg');
+  if (!d){ d=document.createElement('dialog'); d.id='linkDlg'; document.body.appendChild(d); }
+  d.innerHTML=`<form method="dialog"><h2>קישור חיוב לקובץ פירוט</h2>
+    <p class="muted" style="margin-top:0">${esc(t.desc)} · ${fmtD(t.date)} · <strong>${fmt2(t.amount)}</strong></p>
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto">
+      ${cand.map(s=>{ const f=(S.settings.files||{})[s.fileId]; const diff=r2(s.sum-t.amount); return `<label class="chk" style="font-weight:400;padding:10px 12px;border-radius:12px;background:var(--sunk)"><input type="radio" name="lk" value="${esc(s.key)}" ${s.key===cur?'checked':''}> <span><strong>${esc(f?f.name:'קובץ')}</strong>${s.card?' · '+esc(cardName(s.card)):''} · ${monthLabel(s.month)}<br><span class="muted" style="font-size:.86rem">${s.n} עסקאות · ${fmt2(s.sum)}${Math.abs(diff)>=1?` · הפרש ${fmt2(diff)}`:' · תואם'}</span></span></label>`; }).join('') || '<p class="muted">לא נמצאו קובצי פירוט בחודשים הסמוכים. קלטו את קובץ הפירוט של הכרטיס, והמערכת תקשר אותו אוטומטית.</p>'}
+      <label class="chk" style="font-weight:400;padding:10px 12px;border-radius:12px;background:var(--sunk)"><input type="radio" name="lk" value="none" ${t.link==='none'?'checked':''}> <span>ללא קישור: לספור את החיוב מהבנק כהוצאה אחת</span></label>
+      <label class="chk" style="font-weight:400;padding:10px 12px"><input type="radio" name="lk" value="" ${!t.link?'checked':''}> <span>קישור אוטומטי לפי סכום וחודש</span></label>
+    </div>
+    <div class="dlg-actions"><button class="btn primary" value="save">שמירה</button><button class="btn ghost" value="cancel" formnovalidate>ביטול</button></div></form>`;
+  d.querySelector('form').addEventListener('submit',e=>{ if(e.submitter && e.submitter.value==='cancel') return; const v=(d.querySelector('input[name="lk"]:checked')||{}).value||''; updateTx(t.id,{link:v||undefined}); render(); toast(v==='none'?'החיוב ייספר מהבנק':'הקישור נשמר'); });
+  d.showModal();
+}
 function learnCat(desc, catId){ const L=(S.settings.learned ||= {}); L[stripInst(desc)]=catId; L[norm(desc)]=catId; Store.saveSettings(); }
-function sameNameTx(desc, type, excludeIds){ const key=stripInst(desc); return allTx().filter(t=>t.type===type && stripInst(t.desc)===key && !excludeIds.includes(t.id)); }
+function sameNameTx(desc, type, excludeIds){ const key=stripInst(desc); return allTx().filter(t=>stripInst(t.desc)===key && !excludeIds.includes(t.id)); }
 function pickForTx(txs, opts={}){
   const t=txs[0], ids=txs.map(x=>x.id), same=sameNameTx(t.desc,t.type,ids);
   openCatPicker({desc:t.desc, type:t.type, catId:t.catId, sameCount:same.length, sameDiff:same.filter(x=>x.catId!==t.catId).length, groupCount:txs.length, groupLabel:opts.groupLabel,
     apply:(catId,all,learn)=>{
       const list = all ? txs.concat(sameNameTx(t.desc,t.type,ids)) : txs;
-      list.forEach(x=>{ if(x.catId!==catId) updateTx(x.id,{catId}); });
+      const toIncome=catById(catId).kind==='income';
+      list.forEach(x=>{ if(x.catId!==catId || (toIncome && x.type!=='income')) updateTx(x.id, toIncome ? {catId, type:'income'} : {catId}); });
       if (learn) learnCat(t.desc, catId);
       render(); if (document.getElementById('merchDlg').open) renderMerch(); toast(list.length>1?`הסיווג עודכן ב-${list.length} עסקאות`:'הסיווג עודכן');
     }});
@@ -973,10 +1247,13 @@ form.addEventListener('submit',e=>{
   if (!S.range || !inRange(date)) goMonth(date.slice(0,7)); render();
 });
 document.getElementById('addBtn').onclick=()=>openTx();
+document.getElementById('lockBtn').onclick=()=>lockNow();
 document.getElementById('gBtn').onclick=()=>{ S.tab='cats'; render(); const h2=[...app.querySelectorAll('h2')].find(x=>x.textContent.trim()==='Google Drive'); if(h2){ const p=h2.closest('.panel'); p.scrollIntoView({behavior:'smooth',block:'start'}); p.style.outline='3px solid var(--accent)'; setTimeout(()=>p.style.outline='',2500); } };
 
 function bindCommon(){
   app.querySelectorAll('[data-act="add"]').forEach(b=>b.onclick=()=>openTx());
+  app.querySelectorAll('[data-act="nocard"]').forEach(b=>b.onclick=()=>{ S.filters={q:'',type:'nocard',nec:'',cat:'',topic:''}; S.tab='tx'; render(); });
+  app.querySelectorAll('[data-act="unlinked"]').forEach(b=>b.onclick=()=>{ S.filters={q:'',type:'unlinked',nec:'',cat:'',topic:''}; S.tab='tx'; render(); });
   app.querySelectorAll('[data-act="excl"]').forEach(b=>b.onclick=()=>{ S.filters={q:'',type:'excluded',nec:'',cat:'',topic:''}; S.tab='tx'; render(); });
   app.querySelectorAll('[data-act="goinst"]').forEach(b=>b.onclick=()=>{ S.tab='inst'; render(); });
   app.querySelectorAll('[data-act="goimport"]').forEach(b=>b.onclick=()=>{ S.tab='import'; render(); });
@@ -1089,6 +1366,11 @@ function isHeaderRow(row){
 }
 function buildImport(){
   const I=S.imp, m=I.map, out=[], fills=[];
+  if (I.fileCharge===undefined){ const pf=parseFileName(I.name); I.nameInfo=pf; I.fileCharge = pf.chargeDate || (pf.chargeMonth ? pf.chargeMonth+'-01' : ''); }
+  if (!I.nameInfo) I.nameInfo=parseFileName(I.name);
+  // a card statement whose file name holds the card number: every row belongs to that card
+  const nameCard = (m.kind==='credit' && I.nameInfo.digits && !I.cardManual) ? 'כרטיס '+I.nameInfo.digits : '';
+  if (nameCard) I.cardName = nameCard;
   const existing=new Map(allTx().filter(t=>!I.replaceFileId || t.fileId!==I.replaceFileId).map(t=>[t.date+'|'+norm(t.desc)+'|'+t.amount.toFixed(2)+'|'+t.type+'|'+norm(cardName(t.card)), t]));
   let skipped=0, dup=0, cardSkip=0;
   const st={sections:1, sheets:I.rows.sheets||1, dates:[], instRows:0, instDerived:0, cards:new Set(), branches:new Set(), extraCols:new Set(), foreign:0, sectionNames:[]};
@@ -1107,7 +1389,7 @@ function buildImport(){
       heads=nh; st.sections++; if(lastLabel) st.sectionNames.push(lastLabel); continue;
     }
     let date=parseDate(r[cm.date]); const desc=String(r[cm.desc]??'').trim();
-    const chargeDate = cm.chargeCol>-1 ? parseDate(r[cm.chargeCol]) : null;
+    const chargeDate = cm.chargeCol>-1 ? parseDate(r[cm.chargeCol]) : (m.kind==='credit' && I.fileCharge ? I.fileCharge : null);
     let purchaseDate=null;
     let amount=null, type='expense';
     if (m.mode==='split'){
@@ -1120,7 +1402,7 @@ function buildImport(){
     if (!date || !desc || !amount){ const lab=r.map(c=>String(c??'').trim()).filter(Boolean); if(lab.length===1 && lab[0].length<40) lastLabel=lab[0]; skipped++; continue; }
     const isCardCharge = m.kind==='bank' && m.skipCardCharges && type==='expense' && CARD_CO_RE.test(desc);
     const mm={...m, ...cm};
-    const cn=importCardName(r, cm.cardCol);
+    const cn=nameCard || importCardName(r, cm.cardCol);
     let inst = type==='expense' ? rowInst(r, mm, desc, amount) : null;
     if (inst){
       st.instRows++;
@@ -1141,14 +1423,14 @@ function buildImport(){
     const n=(seen.get(key)||0)+1; seen.set(key,n);
     if (existing.has(key) && n===1){ dup++; const ex=existing.get(key); if(type==='expense' && !ex.inst && inst) fills.push({id:ex.id, inst}); continue; }
     const branch = cm.branchCol>-1 ? normBranch(r[cm.branchCol]) : '';
-    const catId = (I.overRow||{})[i] || (I.overDesc||{})[stripInst(desc)+'|'+type] || importCat(desc,type,branch);
+    const catId = (I.overRow||{})[i] || (I.overDesc||{})[stripInst(desc)+'|'+type] || importCat(desc,type,branch,m.kind);
     if (isCardCharge) cardSkip++;
-    const excluded = (I.exclRow && i in I.exclRow) ? I.exclRow[i] : isCardCharge;
+    const excluded = (I.exclRow && i in I.exclRow) ? I.exclRow[i] : false;
     // keep every other column of the row as extra details
     const used=new Set(MAP_KEYS.map(k=>cm[k]).filter(x=>x>-1)); let extra=null;
     heads.forEach((hd,ci)=>{ if(!hd || used.has(ci)) return; let v=r[ci]; if(v===''||v==null) return; if(v instanceof Date) v=parseDate(v); v=String(v).trim(); if(!v) return; (extra ||= {})[hd]=v.slice(0,80); st.extraCols.add(hd); if(/מטבע|currency/i.test(hd) && !/₪|ש"ח|ש״ח|ils|nis|שקל/i.test(v)) st.foreign++; });
     st.dates.push(date); if(cn) st.cards.add(cn); if(branch) st.branches.add(branch);
-    out.push({id:uid(), date, desc, amount, type, catId, excluded, srcKind:m.kind||null, branch:branch||undefined, extra:extra||undefined, purchaseDate:purchaseDate||undefined, chargeDate:(chargeDate&&chargeDate!==date)?chargeDate:undefined, nec:null, note:'', source:'file', cardName:cn, inst, _row:i});
+    out.push({id:uid(), date, desc, amount, type, catId: (isCardCharge && catId==='uncat') ? 'cardpay' : catId, excluded, cardCharge:isCardCharge||undefined, srcKind:m.kind||null, branch:branch||undefined, extra:extra||undefined, purchaseDate:purchaseDate||undefined, chargeDate:(chargeDate&&chargeDate!==date)?chargeDate:undefined, nec:null, note:'', source:'file', cardName:cn, inst, _row:i});
   }
   st.dates.sort();
   return {out, skipped, dup, fills, cardSkip, st};
@@ -1159,6 +1441,7 @@ function analysisHTML(st, out){
   items.push(`${st.dates.length} שורות נתונים${st.sheets>1?` ב-${st.sheets} גיליונות`:''}${st.sections>1?` ב-${st.sections} טבלאות${st.sectionNames.length?' ('+st.sectionNames.map(esc).join(', ')+')':''}`:''}`);
   if (st.dates.length) items.push(`תאריכים: ${fmtD(st.dates[0])} עד ${fmtD(st.dates[st.dates.length-1])}`);
   items.push(`${exp.length} הוצאות${inc.length?`, ${inc.length} הכנסות / זיכויים`:''}`);
+  if (S.imp && S.imp.nameInfo && (S.imp.nameInfo.digits || S.imp.nameInfo.chargeMonth)) items.push(`משם הקובץ: ${[S.imp.nameInfo.digits?'כרטיס '+S.imp.nameInfo.digits:'', S.imp.nameInfo.chargeDate?'תאריך חיוב '+fmtD(S.imp.nameInfo.chargeDate):(S.imp.nameInfo.chargeMonth?'חיוב של '+monthLabel(S.imp.nameInfo.chargeMonth):'')].filter(Boolean).join(' · ')}`);
   if (st.cards.size) items.push(`כרטיסים: ${[...st.cards].map(esc).join(', ')}`);
   if (st.instRows) items.push(`${st.instRows} חיובים בתשלומים${st.instDerived?` (ב-${st.instDerived} הסכום בקובץ הוא סכום העסקה, והתשלום החודשי חושב ממנו)`:''}${st.instMoved?`. ${st.instMoved} מהם שויכו לתאריך החיוב במקום לתאריך הרכישה`:''}`);
   if (st.branches.size) items.push(`${st.branches.size} ענפים`);
@@ -1271,7 +1554,10 @@ function renderImport(){
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
       <h2 style="margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span aria-hidden="true">📄</span>${esc(I.name)}${I.path&&I.path.startsWith('gdrive:')?'<span class="badge" style="font-weight:500">מ-Google Drive</span>':((I.item && !(I.path||'').startsWith('upload:'))?'<span class="badge" style="font-weight:500">מהתיקייה</span>':'')}</h2><button class="btn ghost small" id="impCancel">${I.item?'עצירת הקליטה מהתיקייה':'קובץ אחר'}</button>
     </div>
-    ${m.fromCard?`<p style="margin:8px 0 0;padding:8px 12px;border-radius:10px;background:var(--inc-soft)">✅ הוחלו הגדרות הטעינה ששמרתם ל${esc(m.fromCard)}. אפשר לשנות אותן כאן.</p>`:''}
+    <div style="margin:10px 0 0;padding:10px 12px;border-radius:12px;background:${m.source==='auto'?'var(--accent-soft)':'var(--inc-soft)'};display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap;font-size:.92rem">
+      <span>${m.source==='file'?'✅ הוחלו ההגדרות ששמרתם לקובץ הזה':m.source==='card'?`✅ הוחלו ההגדרות של ${esc(m.fromCard||'הכרטיס')}`:m.source==='sig'?'✅ הוחלו הגדרות של קובץ קודם באותו מבנה':'🔍 ההגדרות זוהו אוטומטית מתוך הנתונים'}${(m.detected&&m.detected.length&&m.source==='auto')?`: ${m.detected.map(esc).join(', ')}`:''}. כל שדה אפשר לשנות כאן, וההגדרות יישמרו לקובץ הזה.</span>
+      <button class="btn small" id="mRedetect" type="button">🔄 זיהוי מחדש מהנתונים</button>
+    </div>
     ${I.replaceFileId?`<p style="margin:8px 0 0;padding:8px 12px;border-radius:10px;background:var(--imp-soft)">🔁 קליטה מחדש: ${allTx().filter(t=>t.fileId===I.replaceFileId).length} התנועות שנקלטו מהקובץ הזה יוחלפו בתוצאה החדשה. סיווגים והחרגות שעשיתם יישמרו לתנועות שלא השתנו.</p>`:''}
     ${I.item?`<p class="muted" style="margin:6px 0 0">קובץ חדש מהתיקייה בפורמט שעוד לא הוגדר. בדקו את העמודות פעם אחת, והמערכת תזכור אותן לכל הקבצים הבאים בפורמט הזה.${S.queue.length?` עוד ${S.queue.length} קבצים בתור.`:''}</p>`:''}
     <div style="margin:14px 0 4px;padding:12px 14px;border-radius:var(--radius-s);background:var(--sunk)${m.kind?'':';outline:2px solid var(--imp)'}">
@@ -1284,7 +1570,7 @@ function renderImport(){
         ${!m.kind?`<span class="muted">${sugg?`נראה כמו קובץ ${sugg==='bank'?'של בנק':'של כרטיס אשראי'}. `:''}בחרו כדי להמשיך.</span>`:(m.autoKind?'<span class="muted" style="font-size:.88rem">זוהה אוטומטית לפי העמודות ושם הקובץ. אפשר להחליף.</span>':'')}
       </div>
       ${m.kind==='bank'?`<p class="muted" style="margin:8px 0 0;font-size:.9rem">בקובץ בנק: סכומים במינוס (או בעמודת חובה) הם הוצאות, וסכומים בפלוס (או בעמודת זכות) הם הכנסות.</p>
-        <label class="chk" style="margin-top:8px;font-weight:400"><input type="checkbox" id="mSkipCards" ${m.skipCardCharges?'checked':''}> לסמן את החיוב החודשי של חברות האשראי כ"לא בדוחות", כדי לא לספור פעמיים את מה שכבר מופיע בקובצי האשראי${cardSkip?` (${cardSkip} חיובים בקובץ הזה)`:''}</label>`:''}
+        <label class="chk" style="margin-top:8px;font-weight:400"><input type="checkbox" id="mSkipCards" ${m.skipCardCharges?'checked':''}> לזהות את החיובים החודשיים של חברות האשראי ולקשר אותם לקובצי הפירוט. חיוב מקושר מוחלף בדוחות בעסקאות שבפירוט, כך שהסכומים תואמים לבנק ולא נספרים פעמיים${cardSkip?` (${cardSkip} חיובים בקובץ הזה)`:''}</label>`:''}
       ${m.kind==='credit'?`<p class="muted" style="margin:8px 0 0;font-size:.9rem">בקובץ אשראי: כל חיוב הוא הוצאה. סכומים במינוס (זיכויים והחזרים) נקלטים כהכנסה.</p>`:''}
     </div>
     <div class="map-grid">
@@ -1300,16 +1586,18 @@ function renderImport(){
       <div class="field"><label>עמודת מספר כרטיס (אם יש)</label><select id="mCardCol">${colOpts(m.cardCol)}</select></div>
       ${m.kind!=='bank' && (m.dealCol??-1)<0?`<div class="field" style="justify-content:flex-end"><label class="chk" style="color:var(--ink)"><input type="checkbox" id="mAmtTotal" ${m.amtIsTotal?'checked':''}> בעסקאות בתשלומים, עמודת הסכום היא סכום העסקה הכולל (לחלק במספר התשלומים)</label></div>`:''}
       <div class="field"><label>עמודת תאריך חיוב (אם יש)</label><select id="mCharge">${colOpts(m.chargeCol??-1)}</select></div>
+      ${m.kind==="credit" && (m.chargeCol??-1)<0 ? `<div class="field"><label for="mFileCharge">תאריך החיוב של הקובץ${I.nameInfo&&I.nameInfo.chargeMonth?" (זוהה משם הקובץ)":""}</label><input type="date" id="mFileCharge" value="${esc(I.fileCharge||"")}"></div>` : ""}
       <div class="field"><label>עמודת ענף / קטגוריה (אם יש)</label><select id="mBranch">${colOpts(m.branchCol??-1)}</select></div>
       <div class="field"><label>עמודת פרטי תשלומים (אם יש)</label><select id="mInst">${colOpts(m.instCol??-1)}</select></div>
       <div class="field"><label>עמודת סכום העסקה הכולל (אם יש)</label><select id="mDeal">${colOpts(m.dealCol??-1)}</select></div>
-      <div class="field"><label for="impCard">${m.cardCol>-1?'כרטיס לשורות בלי מספר':'מאיזה כרטיס או חשבון הקובץ'}</label>
+      <div class="field"><label for="impCard">${(m.kind==='credit' && I.nameInfo && I.nameInfo.digits && !I.cardManual)?'כרטיס (נלקח משם הקובץ, לכל השורות)':m.cardCol>-1?'כרטיס לשורות בלי מספר':'מאיזה כרטיס או חשבון הקובץ'}</label>
         <input id="impCard" list="cardList" value="${esc(I.cardName||'')}" placeholder="${m.kind==='bank'?'למשל: חשבון בנק לאומי':'למשל: ויזה 4417'}"><datalist id="cardList">${cardsList().map(c=>`<option value="${esc(c.name)}">`).join('')}</datalist></div>
     </div>
     ${analysisHTML(st, out)}
     <p style="margin:6px 0 14px"><strong>${out.length}</strong> תנועות מוכנות לקליטה: ${fmt(exp)} הוצאות, ${fmt(inc)} הכנסות.${out.some(t=>t.inst)?` ${out.filter(t=>t.inst).length} מהן חיובים בתשלומים.`:''}
-      <span class="muted">${dup?` ${dup} כבר קיימות ויידלגו.`:''}${skipped?` ${skipped} שורות ללא תאריך/סכום יידלגו.`:''}${cardSkip?` ${cardSkip} חיובי חברות אשראי יסומנו כלא נכללים בדוחות.`:''}${uncat?` ${uncat} לא זוהו ויסומנו כלא מסווגות.`:''}</span></p>
+      <span class="muted">${dup?` ${dup} כבר קיימות ויידלגו.`:''}${skipped?` ${skipped} שורות ללא תאריך/סכום יידלגו.`:''}${cardSkip?` ${cardSkip} חיובי כרטיס אשראי יקושרו לקובצי הפירוט.`:''}${uncat?` ${uncat} לא זוהו ויסומנו כלא מסווגות.`:''}</span></p>
     ${branchPanelHTML(out)}
+    ${(m.kind==='credit' && (I.cardName||st.cards.size))?`<label class="chk" style="font-weight:400;margin:0 0 12px"><input type="checkbox" id="mShare" ${I.shareProfile!==false?'checked':''}> להציע את ההגדרות האלה גם לקבצים הבאים של ${esc([...st.cards][0]||I.cardName)}</label>`:''}
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="impGo" ${m.kind&&(out.length||fills.length)?'':'disabled'}>${!m.kind?'בחרו סוג קובץ':out.length?`קליטת ${out.length} תנועות`:`עדכון פרטי תשלומים ב-${fills.length} תנועות`}</button>${I.item?'<button class="btn" id="impSkip">דילוג על הקובץ</button>':''}</div>
   </div>
   ${out.length?`<h3 style="margin-top:22px">תצוגה מקדימה</h3><div class="table-wrap"><table><thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th>כרטיס</th>${[...st.extraCols].map(c=>`<th>${esc(c)}</th>`).join('')}<th style="text-align:center">בדוחות</th><th style="text-align:left">סכום</th></tr></thead><tbody>
@@ -1317,7 +1605,9 @@ function renderImport(){
   </tbody></table></div>${out.length>40?`<p class="muted">ועוד ${out.length-40}…</p>`:''}`
   :`<div class="panel empty" style="margin-top:18px"><strong>לא נמצאו תנועות</strong>בדקו שבחרתם את שורת הכותרות ואת עמודות התאריך והסכום הנכונות.</div>`}`;
   const num = id => +app.querySelector(id).value;
-  app.querySelector('#mHi').onchange=e=>{ const k=m.kind, sc=m.skipCardCharges; S.imp.map=guessMap(I.rows, +e.target.value); if(k){ S.imp.map.skipCardCharges=sc; setKind(S.imp.map,k); } renderImport(); };
+  app.querySelector('#mHi').onchange=e=>{ const k=m.kind, sc=m.skipCardCharges; S.imp.map=enrichMap(guessMap(I.rows, +e.target.value), I.rows); if(k){ S.imp.map.skipCardCharges=sc; setKind(S.imp.map,k); } S.imp.map.source='auto'; renderImport(); };
+  app.querySelector('#mRedetect')?.addEventListener('click',()=>{ S.imp.map=enrichMap(autoKind(guessMap(I.rows), I.name), I.rows); S.imp.map.source='auto'; I.fileCharge=undefined; renderImport(); toast('ההגדרות זוהו מחדש מתוך הנתונים'); });
+  app.querySelector('#mShare')?.addEventListener('change',e=>{ I.shareProfile=e.target.checked; });
   app.querySelector('#mDate').onchange=()=>{ m.date=num('#mDate'); renderImport(); };
   app.querySelector('#mDesc').onchange=()=>{ m.desc=num('#mDesc'); renderImport(); };
   app.querySelector('#mMode')?.addEventListener('change',e=>{ m.mode=e.target.value; renderImport(); });
@@ -1328,12 +1618,13 @@ function renderImport(){
   app.querySelector('#mCredit')?.addEventListener('change',()=>{ m.credit=num('#mCredit'); renderImport(); });
   app.querySelector('#mAmtTotal')?.addEventListener('change',e=>{ m.amtIsTotal=e.target.checked; renderImport(); });
   app.querySelectorAll('[data-branch]').forEach(s=>s.onchange=()=>{ const b=s.dataset.branch; S.settings.branchMap ||= {}; if(s.value) S.settings.branchMap[b]=s.value; else delete S.settings.branchMap[b]; Store.saveSettings(); if(ACTIVE===GD) GD.saveImportSettings(); renderImport(); });
+  app.querySelector('#mFileCharge')?.addEventListener('change',e=>{ I.fileCharge=e.target.value||''; renderImport(); });
   app.querySelector('#mCharge').onchange=()=>{ m.chargeCol=num('#mCharge'); renderImport(); };
   app.querySelector('#mBranch').onchange=()=>{ m.branchCol=num('#mBranch'); renderImport(); };
   app.querySelector('#mInst').onchange=()=>{ m.instCol=num('#mInst'); renderImport(); };
   app.querySelector('#mDeal').onchange=()=>{ m.dealCol=num('#mDeal'); renderImport(); };
   app.querySelector('#mCardCol').onchange=()=>{ m.cardCol=num('#mCardCol'); renderImport(); };
-  app.querySelector('#impCard').onchange=e=>{ I.cardName=e.target.value.trim(); renderImport(); };
+  app.querySelector('#impCard').onchange=e=>{ I.cardName=e.target.value.trim(); I.cardManual=!!I.cardName; renderImport(); };
   app.querySelectorAll('[data-pincl]').forEach(c=>c.onchange=()=>{ (I.exclRow ||= {})[c.dataset.pincl]=!c.checked; renderImport(); });
   app.querySelectorAll('[data-prow]').forEach(b=>b.onclick=()=>{
     const t=out.find(x=>String(x._row)===b.dataset.prow); if(!t) return;
@@ -1348,7 +1639,7 @@ function renderImport(){
   app.querySelector('#impCancel').onclick=()=>{ if(I.item){ S.queue=[]; S.imp=null; finishBatch(); } else { S.imp=null; renderImport(); } };
   app.querySelector('#impSkip')?.addEventListener('click',()=>{ markFile(I.item); S.imp=null; processQueue(true); });
   app.querySelector('#impGo').onclick=()=>{
-    saveProfile(st.cards);
+    if (I.shareProfile!==false) saveProfile(st.cards);
     if (I.item){ commitImport(out,fills); markFile(I.item); S.imp=null; processQueue(true); return; }
     const uncat=commitImport(out,fills); if(!out.length){ S.imp=null; render(); toast(fills.length?`עודכנו פרטי תשלומים ב-${fills.length} תנועות קיימות`:'לא נקלטו תנועות'); return; } const months=[...new Set(out.map(t=>t.date.slice(0,7)))].sort();
     S.imp=null; goMonth(months[months.length-1]); S.tab = uncat? 'tx':'overview';
@@ -1360,8 +1651,10 @@ async function handleFile(file, replaceId){
   try{
     const rows=await readFile(file);
     if(rows.length<2){ toast('הקובץ ריק או שאין בו טבלה שאפשר לקרוא.'); return; }
-    const prof=findProfile(rows, file.name);
-    S.batch=null; S.imp={name:file.name, path:'upload:'+file.name, rows, map:prof?prof.map:autoKind(guessMap(rows),file.name), cardName:cardHint(rows,file.name)||(prof&&prof.cardName)||'', replaceFileId:replaceId||null}; S.tab='import'; render();
+    const pr=prepareImport(rows, file.name);
+    S.batch=null; S.imp={name:file.name, path:'upload:'+file.name, rows, map:pr.map, cardName:pr.cardName||cardHint(rows,file.name)||'', replaceFileId:replaceId||null};
+    if (pr.fileCharge!==undefined) S.imp.fileCharge=pr.fileCharge;
+    S.tab='import'; render();
   }catch(e){ toast(e.message && /ספרייה|ספריית/.test(e.message)? e.message : 'לא הצלחתי לקרוא את הקובץ. ודאו שזה Excel או CSV.'); }
 }
 
@@ -1433,7 +1726,7 @@ let catCtx=null;
 function openCatPicker(ctx){
   catCtx=ctx; const d=document.getElementById('catDlg');
   document.getElementById('cDesc').textContent=ctx.desc;
-  document.getElementById('cCat').innerHTML=catOptions(ctx.type, ctx.catId)+'<option value="__new">+ קטגוריה חדשה…</option>';
+  document.getElementById('cCat').innerHTML=catOptions('', ctx.catId)+'<option value="__new">+ קטגוריה חדשה…</option>';
   document.getElementById('cNewWrap').hidden=true; document.getElementById('cNewName').value=''; document.getElementById('cNewTopic').value='';
   document.getElementById('cTopicList').innerHTML=[...new Set(cats().filter(c=>c.kind===ctx.type).map(c=>c.topic))].map(t=>`<option value="${esc(t)}">`).join('');
   document.getElementById('cNewNecWrap').hidden = ctx.type==='income';
@@ -1635,7 +1928,7 @@ function renderInst(){
   }
   const rows=all.map(p=>({p, s:planAt(p,ref)}));
   const issuesOf=new Map(all.map(p=>[p,planIssues(p)]));
-  const active=rows.filter(x=>x.s.active).sort((a,b)=>b.s.leftAmt-a.s.leftAmt);
+  const active=rows.filter(x=>x.s.active).sort((a,b)=>a.p.endDate.localeCompare(b.p.endDate));
   const future=rows.filter(x=>x.s.nAt===0);
   const done=rows.filter(x=>x.s.done && mDiff(ref,x.p.end)<=6).sort((a,b)=>b.p.end.localeCompare(a.p.end));
   const leftTotal=active.reduce((a,x)=>a+x.s.leftAmt,0)+future.reduce((a,x)=>a+x.p.total,0);
@@ -1667,7 +1960,7 @@ function renderInst(){
   ${nIssues?`<div class="panel" style="margin-bottom:18px;border-color:var(--imp)">⚠️ <strong>נמצאו ${nIssues} בעיות אפשריות בנתוני התשלומים.</strong> הן מסומנות בצהוב מתחת לעסקאות. המערכת בודקת שהתשלום החודשי × מספר התשלומים מתאים לסכום העסקה, ושאותו חיוב לא נקלט פעמיים מקבצים שונים.</div>`:''}
   <div class="panel trend" style="margin-bottom:18px"><h2>כמה תשלומים יחויבו בכל חודש</h2>${svg}
     <p class="muted" style="margin:6px 0 0;font-size:.9rem">ככל שעסקאות מסתיימות, העמודות יורדות. הסכום שמתפנה הוא כסף שאפשר להעביר לחיסכון.</p></div>
-  ${active.length?`<h2>תשלומים פעילים</h2><div class="table-wrap"><table><thead><tr><th>עסקה</th><th style="text-align:left">תשלום חודשי</th><th>שולמו</th><th>נשארו</th><th style="text-align:left">סכום העסקה</th><th>חיוב אחרון</th></tr></thead><tbody>${active.map(row).join('')}</tbody></table></div>`:''}
+  ${active.length?`<h2>תשלומים פעילים <span class="muted" style="font-size:.85rem;font-weight:400">· לפי מועד החיוב האחרון</span></h2><div class="table-wrap"><table><thead><tr><th>עסקה</th><th style="text-align:left">תשלום חודשי</th><th>שולמו</th><th>נשארו</th><th style="text-align:left">סכום העסקה</th><th>חיוב אחרון</th></tr></thead><tbody>${active.map(row).join('')}</tbody></table></div>`:''}
   ${future.length?`<h2 style="margin-top:22px">עוד לא התחילו</h2><div class="table-wrap"><table><thead><tr><th>עסקה</th><th style="text-align:left">תשלום חודשי</th><th>שולמו</th><th>נשארו</th><th style="text-align:left">סכום העסקה</th><th>חיוב אחרון</th></tr></thead><tbody>${future.map(row).join('')}</tbody></table></div>`:''}
   ${done.length?`<h2 style="margin-top:22px">הסתיימו לאחרונה</h2><ul class="sav-list panel" style="padding:4px 20px">${done.map(x=>`<li><span>${esc(x.p.desc)} <span class="muted" style="font-size:.85rem">· ${x.p.of} תשלומים</span></span><span class="amt" style="color:var(--inc)">${fmt(x.p.amount)} בחודש התפנו</span><span class="tip">החיוב האחרון היה ב-${fmtD(x.p.endDate)}.</span></li>`).join('')}</ul>`:''}`;
   bindCommon();
@@ -1685,6 +1978,7 @@ function renderInst(){
 
 /* ---------- import helpers & linked folder ---------- */
 function removeByFile(fid){
+  bump();
   const removed=[], touched=new Set();
   for (const k in S.months){ const before=S.months[k].length; S.months[k]=S.months[k].filter(t=>{ if(t.fileId===fid){ removed.push(t); return false; } return true; }); if(S.months[k].length!==before) touched.add(k); }
   touched.forEach(k=>Store.saveMonth(k));
@@ -1702,10 +1996,10 @@ function commitImport(out, fills=[]){
   const cmap={}; out.forEach(t=>{ const n=t.cardName; delete t.cardName; t.card = n ? (cmap[n] ||= ensureCard(n)) : null; });
   if (out.length) addTx(out);
   const ds=out.map(t=>t.date).sort();
-  const {headers, ...map}=I.map;
+  const {headers, ...map}=I.map; const names={}; MAP_KEYS.forEach(k=>{ if(map[k]>-1 && headers && headers[map[k]]) names[k]=headers[map[k]]; });
   (S.settings.files ||= {})[fid]={id:fid, name:I.name, path:I.path||('upload:'+I.name), mime:I.mime||null,
     source: (I.path||'').startsWith('gdrive:') ? 'drive' : (I.path && !I.path.startsWith('upload:')) ? 'folder' : 'upload',
-    kind:I.map.kind||null, cardName:I.cardName||'', importedAt:new Date().toISOString(), count:out.length, from:ds[0]||null, to:ds[ds.length-1]||null, map};
+    kind:I.map.kind||null, cardName:I.cardName||'', cardManual:!!I.cardManual, chargeDate:(I.map.kind==='credit' && (I.map.chargeCol??-1)<0 && I.fileCharge) ? I.fileCharge : null, importedAt:new Date().toISOString(), count:out.length, from:ds[0]||null, to:ds[ds.length-1]||null, map, names};
   Store.saveSettings();
   IDB.set('rows:'+fid, {name:I.name, rows:I.rows, sheets:I.rows.sheets||1});
   S.lastFid=fid;
@@ -1732,32 +2026,293 @@ function cardHint(rows, name){
   for (let i=0;i<Math.min(rows.length,12);i++){ const t=rows[i].map(c=>String(c??'')).join(' '); const m=t.match(/(?:כרטיס|card|המסתיים ב|מסתיים ב)[^\d]{0,25}(\d{4})(?!\d)/i); if(m) return 'כרטיס '+m[1]; }
   return '';
 }
-function findProfile(rows, name){
-  const P=S.settings.importProfiles||{};
-  const ch=cardHint(rows, name), CP=S.settings.cardProfiles||{}, cp=ch && CP[normCardKey(ch)];
-  if (cp && cp.names && cp.names.date){
-    for (let i=0;i<Math.min(rows.length,25);i++){
-      const hd=rows[i].map(c=>String(c??'').trim());
-      if (!hd.includes(cp.names.date) || (cp.names.desc && !hd.includes(cp.names.desc))) continue;
-      const map=guessMap(rows,i);
-      MAP_KEYS.forEach(k=>{ map[k] = cp.names[k] ? hd.indexOf(cp.names[k]) : -1; });
-      Object.assign(map,{mode:cp.mode, kind:cp.kind, amtIsTotal:cp.amtIsTotal, skipCardCharges:cp.skipCardCharges, fromCard:ch});
-      return {map, cardName:cp.cardName||ch, sig:null};
-    }
+function applyNames(rows, prof, extra){
+  if (!prof || !prof.names || !prof.names.date) return null;
+  for (let i=0;i<Math.min(rows.length,25);i++){
+    const hd=rows[i].map(c=>String(c??'').trim());
+    if (!hd.includes(prof.names.date) || (prof.names.desc && !hd.includes(prof.names.desc))) continue;
+    const map=guessMap(rows,i);
+    MAP_KEYS.forEach(k=>{ map[k] = prof.names[k] ? hd.indexOf(prof.names[k]) : -1; });
+    Object.assign(map,{mode:prof.mode, kind:prof.kind, amtIsTotal:prof.amtIsTotal, skipCardCharges:prof.skipCardCharges}, extra||{});
+    return map;
   }
-  for (let i=0;i<Math.min(rows.length,25);i++){ const sig=sigOf(rows[i]); if(sig && P[sig]){ const map={...P[sig].map, hi:i, headers:rows[i].map(c=>String(c).trim())}; if(!map.kind) map.kind = map.mode==='posExpense'?'credit':'bank'; if(map.branchCol===undefined) map.branchCol=detectBranchCol(map.headers); return {map, cardName:P[sig].cardName, sig}; } }
   return null;
 }
-function cardFromName(n){
-  const ms=String(n).replace(/\.[^.]+$/,'').match(/(?<!\d)\d{4}(?!\d)/g)||[];
-  const d=ms.find(x=>!(+x>=1990 && +x<=2099)); return d? 'כרטיס '+d : '';
+function findProfile(rows, name){
+  const P=S.settings.importProfiles||{};
+  // 1. this exact file was loaded before: use its own settings
+  const prev=Object.values(S.settings.files||{}).filter(f=>f.name===name && f.names).sort((a,b)=>b.importedAt.localeCompare(a.importedAt))[0];
+  if (prev){ const map=applyNames(rows, {names:prev.names, mode:prev.map.mode, kind:prev.map.kind, amtIsTotal:prev.map.amtIsTotal, skipCardCharges:prev.map.skipCardCharges}, {source:'file'}); if(map) return {map, cardName:prev.cardName||'', sig:null, fileCharge:prev.chargeDate||undefined}; }
+  // 2. settings saved for the same card
+  const ch=cardHint(rows, name), CP=S.settings.cardProfiles||{}, cp=ch && CP[normCardKey(ch)];
+  if (cp){ const map=applyNames(rows, cp, {fromCard:ch, source:'card'}); if(map) return {map, cardName:cp.cardName||ch, sig:null}; }
+  for (let i=0;i<Math.min(rows.length,25);i++){ const sig=sigOf(rows[i]); if(sig && P[sig]){ const map={...P[sig].map, hi:i, headers:rows[i].map(c=>String(c).trim())}; if(!map.kind) map.kind = map.mode==='posExpense'?'credit':'bank'; if(map.branchCol===undefined) map.branchCol=detectBranchCol(map.headers); map.source='sig'; return {map, cardName:P[sig].cardName, sig}; } }
+  return null;
 }
+// fill and validate the column map from the data itself (not only the header names)
+function enrichMap(map, rows){
+  const hi=map.hi, head=(rows[hi]||[]).map(c=>String(c??'').trim());
+  const body=rows.slice(hi+1).filter(r=>!isHeaderRow(r)).slice(0,400);
+  const n=Math.max(head.length, ...body.slice(0,50).map(r=>r.length), 0);
+  const found=[];
+  const cols=[];
+  for (let c=0;c<n;c++){
+    const raw=body.map(r=>r[c]).filter(v=>v!==''&&v!=null);
+    const cnt=Math.max(1,raw.length), hd=head[c]||'';
+    const dates=raw.map(v=> (typeof v==='number' && !H_DATE.test(hd)) ? null : parseDate(v)).filter(Boolean);
+    const nums=raw.map(v=> typeof v==='number' ? v : (/^[\s₪$€£\-+().,\d]+$/.test(String(v)) && /\d/.test(String(v)) ? parseAmt(v) : null)).filter(x=>x!==null && !isNaN(x));
+    const texts=raw.filter(v=>typeof v==='string' && /[a-zA-Zא-ת]/.test(v));
+    cols.push({c, hd, fill:raw.length/Math.max(1,body.length), raw, dateR:dates.length/cnt, dates, numR:nums.length/cnt, nums, textR:texts.length/cnt,
+      distinct:new Set(raw.map(String)).size, avgLen:texts.reduce((a,t)=>a+String(t).length,0)/Math.max(1,texts.length),
+      instR:raw.filter(v=>parseInst(v,false)||parseInst(v,true)).length/cnt,
+      cardR:raw.filter(v=>/^\D{0,6}\d{4}$/.test(String(v).trim())).length/cnt,
+      intR:nums.filter(x=>Number.isInteger(x)&&x>=1&&x<=72).length/cnt});
+  }
+  const ok=k=>map[k]!=null && map[k]>-1;
+  const used=()=>new Set(MAP_KEYS.filter(ok).map(k=>map[k]));
+  // dates: transaction date and charge date
+  const dc=cols.filter(x=>x.dateR>0.7 && x.fill>0.5);
+  if (!ok('date') || !dc.some(x=>x.c===map.date)){ if(dc.length){ map.date=dc[0].c; found.push('תאריך'); } }
+  if (dc.length>=2 && !ok('chargeCol')){
+    const others=dc.filter(x=>x.c!==map.date);
+    const cand=others.find(x=>x.distinct < (cols[map.date]||{distinct:99}).distinct || x.dates.join() > (cols[map.date]||{dates:[]}).dates.join());
+    if (cand){ map.chargeCol=cand.c; found.push('תאריך חיוב'); }
+  }
+  // card digits column
+  if (!ok('cardCol')){ const cc=cols.find(x=>x.cardR>0.8 && x.distinct<=6 && !used().has(x.c)); if(cc){ map.cardCol=cc.c; found.push('מספר כרטיס'); } }
+  // installments
+  if (!ok('instCol')){
+    const ic=cols.find(x=>x.instR>0 && !used().has(x.c));
+    if (ic){ map.instCol=ic.c; found.push('תשלומים'); }
+    else {
+      const ints=cols.filter(x=>x.intR>0.8 && x.fill>0.05 && !used().has(x.c) && x.distinct<=72);
+      for (let a=0;a<ints.length && !ok('instCol');a++) for (let b=0;b<ints.length;b++){ if(a===b) continue;
+        const A=ints[a], B=ints[b]; let good=0, tot=0;
+        body.forEach(r=>{ const x=+r[A.c], y=+r[B.c]; if(x&&y){ tot++; if(x<=y && y>=2) good++; } });
+        if (tot && good/tot>0.9 && /תשלום|מתוך|תשלומים/.test(A.hd+B.hd)){ map.instCol=A.c; map.instOfCol=B.c; found.push('תשלומים'); break; } }
+    }
+  }
+  // description
+  if (!ok('desc') || (cols[map.desc]||{}).textR<0.5){
+    const tc=cols.filter(x=>x.textR>0.7 && !used().has(x.c)).sort((a,b)=>(b.distinct*b.avgLen)-(a.distinct*a.avgLen))[0];
+    if (tc){ map.desc=tc.c; found.push('תיאור'); }
+  }
+  // amounts
+  const ncols=cols.filter(x=>x.numR>0.8 && x.dateR<0.3 && x.cardR<0.5 && !/יתרה|balance|אסמכתא|reference|מספר/i.test(x.hd) && x.c!==map.instCol && x.c!==map.instOfCol);
+  if (map.mode!=='split' && (!ok('amt') || !ncols.some(x=>x.c===map.amt))){ const a=ncols.sort((x,y)=>y.fill-x.fill)[0]; if(a){ map.amt=a.c; found.push('סכום'); } }
+  if (ok('amt') && map.mode!=='split'){
+    // deal amount vs charged amount: the deal column is >= the charge column and bigger on installment rows
+    const other=ncols.filter(x=>x.c!==map.amt);
+    for (const o of other){
+      let ge=0, gt=0, le=0, tot=0;
+      body.forEach(r=>{ const a=Math.abs(parseAmt(r[map.amt])||0), b=Math.abs(parseAmt(r[o.c])||0); if(!a||!b) return; tot++; if(b>=a-0.01) ge++; if(b>a+0.01) gt++; if(a>b+0.01) le++; });
+      if (!tot) continue;
+      if (ge/tot>0.95 && gt>0 && !ok('dealCol')){ map.dealCol=o.c; found.push('סכום עסקה'); break; }
+      if (le>0 && gt===0 && !ok('dealCol')){ map.dealCol=map.amt; map.amt=o.c; found.push('סכום חיוב / עסקה'); break; }   // the chosen column was the deal total
+    }
+  }
+  // branch / category
+  if (!ok('branchCol')){ const bc=cols.find(x=>x.textR>0.8 && x.c!==map.desc && !used().has(x.c) && x.distinct<x.raw.length && x.distinct/Math.max(1,x.raw.length)<=0.8 && x.distinct>1 && x.avgLen>=2 && x.avgLen<=25 && !/מטבע|currency|סוג/i.test(x.hd)); if(bc){ map.branchCol=bc.c; found.push('ענף'); } }
+  // file kind from the data
+  if (!map.kind){
+    const bankish = map.mode==='split' || cols.some(x=>/יתרה|balance/i.test(x.hd));
+    const creditish = ok('instCol') || ok('cardCol') || ok('chargeCol') || ok('dealCol');
+    if (bankish && !creditish) setKind(map,'bank'); else if (creditish && !bankish) setKind(map,'credit');
+    if (map.kind){ map.autoKind=true; found.push(map.kind==='bank'?'סוג: בנק':'סוג: אשראי'); }
+  }
+  map.amtIsTotal = ok('dealCol') ? false : map.amtIsTotal;
+  map.detected=[...new Set(found)];
+  return map;
+}
+function prepareImport(rows, name){
+  const prof=findProfile(rows, name);
+  if (prof){ prof.map.headers=(rows[prof.map.hi]||[]).map(c=>String(c??'').trim()); return {map:prof.map, cardName:prof.cardName, fileCharge:prof.fileCharge, auto:true}; }
+  const map=enrichMap(autoKind(guessMap(rows), name), rows); map.source='auto';
+  return {map, cardName:'', auto:false};
+}
+// card statement file names usually hold the last 4 digits and the charge date, e.g. "visa_1234_10.10.2026.xlsx"
+function parseFileName(name){
+  let s=String(name||'').replace(/\.[^.]+$/,''), date=null, month=null; const p2=x=>String(x).padStart(2,'0');
+  const pats=[
+    [/(20\d{2})[-_. ]?(0[1-9]|1[0-2])[-_. ]?(0[1-9]|[12]\d|3[01])(?!\d)/, m=>({date:`${m[1]}-${m[2]}-${m[3]}`})],
+    [/(?<!\d)(0?[1-9]|[12]\d|3[01])[-_. .](0?[1-9]|1[0-2])[-_. .](20\d{2}|\d{2})(?!\d)/, m=>({date:`${m[3].length===2?'20'+m[3]:m[3]}-${p2(m[2])}-${p2(m[1])}`})],
+    [/(?<!\d)(0?[1-9]|1[0-2])[-_. .](20\d{2})(?!\d)/, m=>({month:`${m[2]}-${p2(m[1])}`})],
+    [/(20\d{2})[-_. .](0?[1-9]|1[0-2])(?!\d)/, m=>({month:`${m[1]}-${p2(m[2])}`})]
+  ];
+  for (const [re,fn] of pats){ const m=s.match(re); if(m){ const r=fn(m); date=r.date||null; month=r.month||(date&&date.slice(0,7)); s=s.replace(m[0],' '); break; } }
+  const digs=s.match(/(?<!\d)\d{4}(?!\d)/g)||[]; const card=digs.find(x=>!(+x>=1990 && +x<=2099))||'';
+  return {card: card?'כרטיס '+card:'', digits:card, chargeDate:date, chargeMonth:month};
+}
+function cardFromName(n){ return parseFileName(n).card; }
 const fileKey = (path,f) => path+'|'+f.size+'|'+f.lastModified;
 const isSheet = n => /\.(csv|xlsx|xls|tsv)$/i.test(n) && !/^~\$/.test(n);
 function markFile(it){ const k=fileKey(it.path,it.file); (S.settings.importedFiles ||= {})[k]=S.lastFid||Date.now(); if(S.lastFid && S.settings.files && S.settings.files[S.lastFid]) S.settings.files[S.lastFid].key=k; S.lastFid=null; Store.saveSettings(); }
 
 const FS_API = ('showDirectoryPicker' in window) && window.self===window.top;
 let dirHandle=null;
+
+/* ---------- encrypted vault (Face ID / passkey + PIN) ----------
+   The app data is encrypted with a random AES-256 key (DEK). The DEK is stored only wrapped:
+   once with a key derived from the PIN (PBKDF2), and optionally with a key from the device's passkey (WebAuthn PRF).
+   Neither the PIN nor any key is ever stored. */
+const te=new TextEncoder(), td=new TextDecoder();
+const VAULT={ meta:null, dek:null, raw:null, timer:null, saving:null,
+  supported(){ return !!(window.isSecureContext && window.crypto && crypto.subtle && window.indexedDB); },
+  bioSupported(){ return this.supported() && !!window.PublicKeyCredential && window.self===window.top; },
+  unlocked(){ return !!(this.meta && this.dek); },
+  async save(){
+    if (!this.unlocked()) return;
+    const payload={v:1, settings:S.settings, months:S.months, gclient:GD.clientId(), gfolder:GD.folderId(), savedAt:new Date().toISOString()};
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv}, this.dek, te.encode(JSON.stringify(payload)));
+    this.meta.data={iv, ct}; await IDB.set('vault', this.meta);
+  },
+  queueSave(){ clearTimeout(this.timer); this.timer=setTimeout(()=>{ this.saving=this.save(); },400); },
+  async flush(){ if(this.timer){ clearTimeout(this.timer); this.timer=null; await this.save(); } else if(this.saving) await this.saving; }
+};
+async function pinKEK(pin, salt){ const base=await crypto.subtle.importKey('raw',te.encode(pin),'PBKDF2',false,['deriveKey']); return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']); }
+async function prfKEK(out, salt){ const base=await crypto.subtle.importKey('raw',out,'HKDF',false,['deriveKey']); return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt,info:te.encode('money-manager-vault')},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']); }
+async function wrapRaw(kek, raw){ const iv=crypto.getRandomValues(new Uint8Array(12)); return {iv, wk:await crypto.subtle.encrypt({name:'AES-GCM',iv},kek,raw)}; }
+async function openWithRaw(raw){
+  VAULT.raw=new Uint8Array(raw);
+  VAULT.dek=await crypto.subtle.importKey('raw',VAULT.raw,{name:'AES-GCM'},false,['encrypt','decrypt']);
+  const d=VAULT.meta.data; if(!d) return {};
+  return JSON.parse(td.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:d.iv},VAULT.dek,d.ct)));
+}
+async function unlockWithPin(pin){ const p=VAULT.meta.pin; const kek=await pinKEK(pin,p.salt); const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:p.iv},kek,p.wk); return openWithRaw(raw); }
+async function passkeyPRF(credId, prfSalt, create){
+  if (create){
+    const cred=await navigator.credentials.create({publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)), rp:{name:'הכסף שלי', id:location.hostname},
+      user:{id:crypto.getRandomValues(new Uint8Array(16)), name:'money-manager@'+location.hostname, displayName:'הכסף שלי'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred'},
+      timeout:60000, extensions:{prf:{eval:{first:prfSalt}}}}});
+    const ext=cred.getClientExtensionResults()||{};
+    if (!ext.prf || ext.prf.enabled===false) throw new Error('noprf');
+    const first=ext.prf.results && ext.prf.results.first;
+    return {credId:new Uint8Array(cred.rawId), out:first||null};
+  }
+  const a=await navigator.credentials.get({publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)), rpId:location.hostname,
+    allowCredentials:[{type:'public-key', id:credId}], userVerification:'required', timeout:60000, extensions:{prf:{eval:{first:prfSalt}}}}});
+  const r=(a.getClientExtensionResults()||{}).prf; const out=r && r.results && r.results.first;
+  if (!out) throw new Error('noprf');
+  return {out};
+}
+async function unlockWithBio(){ const b=VAULT.meta.bio; const {out}=await passkeyPRF(b.credId,b.prfSalt,false); const kek=await prfKEK(out,b.hkdfSalt); const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:b.iv},kek,b.wk); return openWithRaw(raw); }
+async function createVault(pin){
+  const raw=crypto.getRandomValues(new Uint8Array(32)), salt=crypto.getRandomValues(new Uint8Array(16));
+  const kek=await pinKEK(pin,salt), w=await wrapRaw(kek,raw);
+  VAULT.meta={v:1, created:new Date().toISOString(), autoLock:5, pin:{salt, iv:w.iv, wk:w.wk}, bio:null, data:null, fails:0};
+  await openWithRaw(raw); await VAULT.save();
+  try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  try{ if(navigator.storage && navigator.storage.persist) await navigator.storage.persist(); }catch(e){}
+}
+async function addBio(){
+  const prfSalt=crypto.getRandomValues(new Uint8Array(32)), hkdfSalt=crypto.getRandomValues(new Uint8Array(16));
+  let {credId, out}=await passkeyPRF(null, prfSalt, true);
+  if (!out) out=(await passkeyPRF(credId, prfSalt, false)).out;   // Safari returns the PRF value only on sign-in
+  const kek=await prfKEK(out,hkdfSalt), w=await wrapRaw(kek,VAULT.raw);
+  VAULT.meta.bio={credId, prfSalt, hkdfSalt, iv:w.iv, wk:w.wk, added:new Date().toISOString()};
+  await IDB.set('vault', VAULT.meta);
+}
+async function changePin(pin){ const salt=crypto.getRandomValues(new Uint8Array(16)); const w=await wrapRaw(await pinKEK(pin,salt),VAULT.raw); VAULT.meta.pin={salt, iv:w.iv, wk:w.wk}; await IDB.set('vault',VAULT.meta); }
+function bioErr(e){
+  const n=e && (e.name||e.message)||'';
+  if (n==='noprf') return 'המכשיר או הדפדפן לא תומכים בפתיחה מוצפנת עם Face ID (נדרש iOS 18 ומעלה, או Chrome באנדרואיד). אפשר להמשיך עם הקוד האישי.';
+  if (n==='NotAllowedError') return 'הזיהוי בוטל או לא הצליח.';
+  if (n==='SecurityError') return 'Face ID זמין רק כשהמערכת פתוחה מכתובת https (כמו האתר ב-GitHub Pages).';
+  return 'הזיהוי הביומטרי נכשל ('+n+').';
+}
+async function lockNow(){
+  if (!VAULT.meta) return;
+  toast('נועל…');
+  await VAULT.flush();
+  if (GD.busy && GD.token){ const t0=Date.now(); while(GD.busy && Date.now()-t0<6000) await new Promise(r=>setTimeout(r,200)); }
+  location.reload();
+}
+function showLock(){
+  return new Promise(resolve=>{
+    const m=VAULT.meta, el=document.createElement('div'); el.id='lockScreen';
+    el.innerHTML=`<div class="lock-card">
+      <div class="lock-logo">₪</div>
+      <h2 style="margin:10px 0 4px">הכסף שלי</h2>
+      <p class="muted" style="margin:0 0 18px">🔒 הנתונים שמורים במכשיר בצורה מוצפנת</p>
+      ${m.bio && VAULT.bioSupported()?'<button class="btn primary" id="lkBio" style="width:100%;padding:14px;font-size:1.05rem">פתיחה עם Face ID</button><div class="lock-or"><span>או קוד אישי</span></div>':''}
+      <form id="lkForm" style="display:flex;gap:8px"><input id="lkPin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="קוד אישי" aria-label="קוד אישי" style="flex:1;min-width:0;width:100%;text-align:center;font-size:1.1rem;letter-spacing:.3em;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--surface)"><button class="btn ${m.bio?'':'primary'}" id="lkGo">פתיחה</button></form>
+      <p id="lkErr" role="alert" style="color:var(--exp);min-height:1.4em;margin:10px 0 0;font-size:.92rem"></p>
+      <button class="btn ghost small" id="lkForgot" type="button" style="margin-top:6px">שכחתי את הקוד</button>
+    </div>`;
+    document.body.appendChild(el);
+    const err=el.querySelector('#lkErr'), done=async (fn)=>{
+      try{ const p=await fn(); m.fails=0; await IDB.set('vault',m); el.remove(); resolve(p||{}); }
+      catch(e){ return e; }
+    };
+    el.querySelector('#lkBio')?.addEventListener('click',async()=>{ err.textContent=''; const e=await done(unlockWithBio); if(e) err.textContent=bioErr(e); });
+    el.querySelector('#lkForm').addEventListener('submit',async ev=>{
+      ev.preventDefault(); const pin=el.querySelector('#lkPin').value; if(!pin) return;
+      const wait=Math.min(30, Math.max(0,(m.fails||0)-4)*5); if(wait && m.lastFail && Date.now()-m.lastFail<wait*1000){ err.textContent=`יותר מדי ניסיונות. נסו שוב בעוד ${Math.ceil((wait*1000-(Date.now()-m.lastFail))/1000)} שניות.`; return; }
+      el.querySelector('#lkGo').disabled=true; err.textContent='בודק…';
+      const e=await done(()=>unlockWithPin(pin));
+      if (e){ m.fails=(m.fails||0)+1; m.lastFail=Date.now(); await IDB.set('vault',m); err.textContent='הקוד שגוי.'; el.querySelector('#lkGo').disabled=false; el.querySelector('#lkPin').select(); }
+    });
+    const fg=el.querySelector('#lkForgot');
+    fg.onclick=async()=>{
+      if (!fg.dataset.sure){ fg.dataset.sure='1'; fg.textContent='למחוק את הנתונים המקומיים? לחצו שוב'; err.textContent='אין דרך לפתוח את ההצפנה בלי הקוד. אפשר למחוק את העותק המקומי ולטעון הכול מחדש מ-Google Drive אחרי התחברות.'; return; }
+      await IDB.del('vault'); IDB.clearPrefix('rows:'); location.reload();
+    };
+    setTimeout(()=>{ if(!m.bio) el.querySelector('#lkPin').focus(); },50);
+  });
+}
+let lastActive=Date.now(), hiddenAt=0;
+['pointerdown','keydown','scroll','touchstart'].forEach(ev=>window.addEventListener(ev,()=>{ lastActive=Date.now(); },{passive:true}));
+document.addEventListener('visibilitychange',()=>{
+  if (!VAULT.unlocked()) return;
+  if (document.hidden){ hiddenAt=Date.now(); VAULT.flush(); }
+  else { const mins=VAULT.meta.autoLock; if (mins && hiddenAt && Date.now()-hiddenAt>mins*60000) lockNow(); }
+});
+setInterval(()=>{ if(VAULT.unlocked() && VAULT.meta.autoLock && Date.now()-lastActive>VAULT.meta.autoLock*60000 && !document.querySelector('dialog[open]')) lockNow(); },15000);
+function securityPanelHTML(){
+  if (!VAULT.supported()) return `<div class="panel" style="margin-bottom:22px"><h2>🔒 נעילה והצפנה</h2><p class="muted" style="margin:0">הצפנת הנתונים במכשיר זמינה כשהמערכת פתוחה מכתובת https, כמו האתר ב-GitHub Pages.</p></div>`;
+  if (!VAULT.meta) return `<div class="panel" style="margin-bottom:22px;border-color:var(--accent)"><h2>🔒 נעילה והצפנה במכשיר</h2>
+    <p style="margin-top:0">שמירת הנתונים במכשיר בצורה מוצפנת: התיקייה בדרייב, הקבצים שנקלטו, הקטגוריות וההגדרות יישמרו, ובכל פתיחה האפליקציה תיפתח עם Face ID או קוד אישי. הקוד לא נשמר בשום מקום.</p>
+    <div class="form-grid" style="align-items:end"><div class="field"><label for="vPin1">קוד אישי חדש (לפחות 4 תווים)</label><input id="vPin1" type="password" inputmode="numeric" autocomplete="new-password"></div>
+    <div class="field"><label for="vPin2">שוב, לאימות</label><input id="vPin2" type="password" inputmode="numeric" autocomplete="new-password"></div>
+    <button class="btn primary" id="vCreate">הפעלת הנעילה</button></div>
+    <p class="muted" style="font-size:.86rem;margin:10px 0 0">חשוב: אם הקוד יישכח, אי אפשר לפתוח את העותק המקומי. הנתונים עצמם שמורים גם בדרייב, ואפשר לטעון אותם מחדש משם.</p></div>`;
+  const b=VAULT.meta.bio;
+  return `<div class="panel" style="margin-bottom:22px;border-color:var(--inc)"><h2>🔒 נעילה והצפנה במכשיר</h2>
+    <p style="margin-top:0">✅ הנתונים במכשיר מוצפנים (AES-256). ${b?'פתיחה עם <strong>Face ID</strong> או קוד אישי.':'פתיחה עם קוד אישי.'}</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      ${VAULT.bioSupported()?(b?'<button class="btn" id="vBioOff">הסרת Face ID</button>':'<button class="btn primary" id="vBio">הוספת Face ID</button>'):'<span class="muted" style="font-size:.88rem">Face ID זמין בדפדפן התומך (iOS 18+, Chrome באנדרואיד) כשהאתר פתוח ב-https.</span>'}
+      <button class="btn" id="vLock">נעילה עכשיו</button>
+      <label class="muted" style="font-size:.9rem">נעילה אוטומטית אחרי <select id="vAuto" style="border:1px solid var(--line);border-radius:10px;padding:4px 8px;background:var(--surface)">${[1,3,5,15,30,0].map(x=>`<option value="${x}" ${(VAULT.meta.autoLock??5)===x?'selected':''}>${x?x+' דקות':'אף פעם'}</option>`).join('')}</select></label>
+    </div>
+    <details style="margin-top:12px"><summary style="cursor:pointer">שינוי קוד או ביטול ההצפנה</summary>
+      <div class="form-grid" style="align-items:end;margin-top:10px"><div class="field"><label for="vNew">קוד חדש</label><input id="vNew" type="password" inputmode="numeric" autocomplete="new-password"></div><button class="btn" id="vChange">שינוי הקוד</button></div>
+      <button class="btn ghost small" id="vOff" style="margin-top:10px;color:var(--exp)">ביטול ההצפנה (הנתונים יישמרו בדפדפן בלי הצפנה)</button>
+    </details></div>`;
+}
+function bindSecurity(){
+  const q=s=>app.querySelector(s);
+  q('#vCreate')?.addEventListener('click',async()=>{
+    const a=q('#vPin1').value, b=q('#vPin2').value;
+    if (a.length<4){ toast('הקוד צריך להיות לפחות 4 תווים'); q('#vPin1').focus(); return; }
+    if (a!==b){ toast('הקודים לא זהים'); q('#vPin2').focus(); return; }
+    q('#vCreate').disabled=true; await createVault(a); updateLockBtn(); renderCats();
+    toast('הנעילה הופעלה. אפשר להוסיף עכשיו Face ID.', VAULT.bioSupported()?[{label:'הוספת Face ID',fn:async()=>{ try{ await addBio(); renderCats(); toast('Face ID נוסף'); }catch(e){ toast(bioErr(e)); } }}]:[]);
+  });
+  q('#vBio')?.addEventListener('click',async()=>{ try{ await addBio(); renderCats(); toast('Face ID נוסף. בפתיחה הבאה אפשר לפתוח בזיהוי פנים.'); }catch(e){ toast(bioErr(e)); } });
+  q('#vBioOff')?.addEventListener('click',async()=>{ VAULT.meta.bio=null; await IDB.set('vault',VAULT.meta); renderCats(); toast('Face ID הוסר. הפתיחה תהיה עם הקוד בלבד.'); });
+  q('#vLock')?.addEventListener('click',lockNow);
+  q('#vAuto')?.addEventListener('change',async e=>{ VAULT.meta.autoLock=+e.target.value; await IDB.set('vault',VAULT.meta); toast('נשמר'); });
+  q('#vChange')?.addEventListener('click',async()=>{ const v=q('#vNew').value; if(v.length<4){ toast('הקוד צריך להיות לפחות 4 תווים'); return; } await changePin(v); q('#vNew').value=''; toast('הקוד שונה'); });
+  const off=q('#vOff'); off?.addEventListener('click',async()=>{
+    if (!off.dataset.sure){ off.dataset.sure='1'; off.textContent='לבטל את ההצפנה? לחצו שוב'; return; }
+    await VAULT.flush(); VAULT.meta=null; VAULT.dek=null; VAULT.raw=null; await IDB.del('vault'); Store.saveLocal(); updateLockBtn(); renderCats(); toast('ההצפנה בוטלה');
+  });
+}
+function updateLockBtn(){ const b=document.getElementById('lockBtn'); if(b) b.hidden=!VAULT.unlocked(); const mb=document.getElementById('moreLock'); if(mb) mb.hidden=!VAULT.unlocked(); }
 
 /* ---------- project_data folder ---------- */
 const PROJ = {
@@ -1966,6 +2521,8 @@ async function driveDisconnect(){
   updateStatus(); render(); toast('נותקת מ-Google Drive. הנתונים הוסרו מהמסך ומהדפדפן, והם נשארים שמורים בדרייב.');
 }
 function clearScreenData(){
+  // full sign-out also removes the encrypted copy on this device
+  if (VAULT.meta){ VAULT.meta=null; VAULT.dek=null; VAULT.raw=null; IDB.del('vault'); setTimeout(updateLockBtn,0); }
   // only the local copy: files in Drive / project_data are not touched
   S.months={}; S.settings=normalizeSettings(null); S.imp=null; S.queue=[]; S.batch=null; S.range=null; S.month=todayISO().slice(0,7);
   try{ localStorage.removeItem(LS_KEY); }catch(e){}
@@ -2009,7 +2566,7 @@ function drivePanelHTML(){
   if (ACTIVE===GD) return `<div class="panel" style="margin-bottom:22px;border-color:var(--accent)"><h2>Google Drive</h2>
     <p style="margin-top:0">${GD.token?'מחובר':'החיבור פג'}${GD.user?` כ-<strong dir="ltr">${esc(GD.user.emailAddress)}</strong>`:''}. הנתונים נטענים מהתיקייה <strong>${esc(GD.folderName)}</strong> ונשמרים בה${GD.canEdit?'':'. <strong>לחשבון הזה יש הרשאת צפייה בלבד</strong>, ולכן שינויים לא יישמרו בדרייב'}. שינויים של משתמשים אחרים נטענים כשחוזרים לחלון, ובכל דקה וחצי.</p>
     <p class="muted" style="font-size:.88rem">פרטי ההתחברות נשמרים רק בזיכרון של הדף ונמחקים כשסוגרים אותו. בכל פתיחה מתחברים מחדש בלחיצה.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">${GD.token?'<button class="btn" id="gdReload">רענון מהדרייב</button>':'<button class="btn primary" id="gdReauth">התחברות מחדש</button>'}<button class="btn" id="gdShare">העתקת קישור למשתמשים אחרים</button><button class="btn ghost" id="gdOff">התנתקות</button></div></div>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${GD.token?'<button class="btn" id="gdReload">רענון מהדרייב</button>':'<button class="btn primary" id="gdReauth">התחברות מחדש</button>'}<button class="btn" id="gdShare">העתקת קישור למשתמשים אחרים</button>${VAULT.unlocked()?'<button class="btn" id="gdLock">🔒 נעילה</button>':''}<button class="btn ghost" id="gdOff">התנתקות מלאה ומחיקה מהמכשיר</button></div></div>`;
   return `<div class="panel" style="margin-bottom:22px"><h2>Google Drive</h2>
     <p style="margin-top:0">שמירת הנתונים בתיקייה משותפת בדרייב מאפשרת לצפות בהם מכמה חשבונות Google. פרטי ההתחברות לא נשמרים בשום מקום.</p>
     <div class="form-grid" style="align-items:end">
@@ -2035,10 +2592,27 @@ function bindDrivePanel(){
   });
   app.querySelector('#gdReload')?.addEventListener('click',async()=>{ try{ await activateBackend(GD,false); toast('הנתונים נטענו מהדרייב'); }catch(e){ toast(driveErr(e)); } });
   app.querySelector('#gdReauth')?.addEventListener('click',driveReauth);
+  app.querySelector('#gdLock')?.addEventListener('click',lockNow);
   app.querySelector('#gdOff')?.addEventListener('click',driveDisconnect);
   app.querySelector('#gdShare')?.addEventListener('click',async()=>{ const l=driveShareLink(); try{ await navigator.clipboard.writeText(l); toast('הקישור הועתק. שלחו אותו למשתמשים שהתיקייה משותפת איתם.'); }catch(e){ toast(l); } });
 }
 
+function fixCardsFromFileNames(){
+  const files=S.settings.files||{}, touched=new Set(); let n=0;
+  Object.entries(S.months).forEach(([k,arr])=>arr.forEach(t=>{
+    const f=t.fileId && files[t.fileId]; if(!f || f.kind!=='credit' || f.cardManual) return;
+    const d=parseFileName(f.name).digits; if(!d) return;
+    if (digitsOf(cardName(t.card))===d) return;
+    t.card=ensureCard('כרטיס '+d); f.cardName='כרטיס '+d; touched.add(k); n++;
+  }));
+  if (n){ touched.forEach(k=>Store.saveMonth(k)); Store.saveSettings(); bump(); setTimeout(()=>toast(`מספר הכרטיס תוקן ב-${n} תנועות לפי שם הקובץ שלהן`),600); }
+}
+function migrateData(){
+  { const touched=new Set(); Object.entries(S.months).forEach(([k,arr])=>arr.forEach(t=>{ if(t.type==='income' && t.catId==='extra_inc' && isCreditRow(t)){ t.catId=kwCat(t.desc,'expense')||defaultBranchCat(t.branch)||'uncat'; touched.add(k); } }));
+    if (touched.size) setTimeout(()=>{ touched.forEach(k=>Store.saveMonth(k)); toast('זיכויים מכרטיסי אשראי הועברו מ"הכנסות" לקטגוריות ההוצאה שלהם'); },800); }
+  Object.values(S.months).forEach(arr=>arr.forEach(t=>{ if(t.cardCharge && t.catId==='uncat') t.catId='cardpay'; if(t.srcKind==='bank' && t.type==='expense' && CARD_CO_RE.test(t.desc) && !t.cardCharge){ t.cardCharge=true; if(t.excluded && !t.exclManual) t.excluded=false; if(t.catId==='uncat') t.catId='cardpay'; } }));
+  bump();
+}
 function normalizeSettings(s){
   s = s || {};
   if (!Array.isArray(s.categories) || !s.categories.length) s.categories = JSON.parse(JSON.stringify(DEFAULT_CATS));
@@ -2065,7 +2639,7 @@ async function activateBackend(be, merge){
   const fromFolder=await be.load();
   if (fromFolder){
     const d = merge ? mergeData(fromFolder, {settings:S.settings, months:S.months}) : {settings:normalizeSettings(fromFolder.settings), months:fromFolder.months};
-    S.settings=d.settings; S.months=d.months;
+    S.settings=d.settings; S.months=d.months; migrateData(); fixCardsFromFileNames();
     Store.saveLocal();
     if (merge) be.saveAll();
   } else be.saveAll();
@@ -2117,6 +2691,7 @@ function projPanelHTML(){
     <button class="btn primary" id="projPick">בחירת תיקיית הפרויקט</button></div>`;
 }
 function bindProjPanel(){
+  bindSecurity();
   bindDrivePanel();
   app.querySelector('#projPick')?.addEventListener('click',connectProj);
   app.querySelector('#projOff')?.addEventListener('click',disconnectProj);
@@ -2185,10 +2760,12 @@ function renderPicker(){
         <td>${x.imported?`<span class="badge">נקלט${x.when?' ב-'+new Date(x.when).toLocaleDateString('he-IL'):''}</span>`:'<span class="badge b-inc">חדש</span>'}</td>
         <td style="white-space:nowrap"><button class="icon-btn" data-pup aria-label="למעלה" ${i?'':'disabled'}>▲</button><button class="icon-btn" data-pdown aria-label="למטה" ${i<P.items.length-1?'':'disabled'}>▼</button></td></tr>`).join('')}</tbody></table></div>
     ${sel.some(x=>x.imported)?`<p class="muted" style="font-size:.88rem;margin:10px 0 0">🔁 קבצים שכבר נקלטו ייטענו מחדש: התנועות הקודמות שלהם יוחלפו, וסיווגים והחרגות שעשיתם יישמרו לתנועות שלא השתנו.</p>`:''}
+    <label class="chk" style="font-weight:400;margin-top:12px"><input type="checkbox" id="pkAuto" ${S.autoLoad?'checked':''}> לטעון ישר, בלי לעצור, קבצים שכבר יש להם הגדרות טעינה שמורות (לקובץ או לכרטיס). קבצים חדשים תמיד ייפתחו לבדיקה</label>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="pkGo" ${sel.length?'':'disabled'}>${sel.length?`טעינת ${sel.length} קבצים לפי הסדר`:'בחרו קבצים לטעינה'}</button></div>
   </div>`;
   const re=()=>renderPicker();
   app.querySelector('#pkCancel').onclick=()=>{ S.pick=null; render(); };
+  app.querySelector('#pkAuto').onchange=e=>{ S.autoLoad=e.target.checked; };
   app.querySelector('#pkNew').onclick=()=>{ P.items.forEach(x=>x.sel=!x.imported); re(); };
   app.querySelector('#pkAll').onclick=()=>{ P.items.forEach(x=>x.sel=true); re(); };
   app.querySelector('#pkNone').onclick=()=>{ P.items.forEach(x=>x.sel=false); re(); };
@@ -2218,12 +2795,10 @@ async function processQueue(interactive){
     const it=S.queue.shift(); let rows;
     try{ rows=await readFile(it.file); }catch(e){ markFile(it); continue; }
     if (rows.length<2){ markFile(it); continue; }
-    const prof=findProfile(rows, it.file.displayName||it.file.name), fcard=cardHint(rows, it.file.displayName||it.file.name);
-    if (prof){
-      S.imp={name:it.file.displayName||it.file.name, path:it.path, mime:it.file.mime||null, rows, map:prof.map, cardName:fcard||prof.cardName||'', item:it, replaceFileId:it.replaceFid||null};
-      const b=buildImport(); commitImport(b.out,b.fills); markFile(it); continue;
-    }
-    S.imp={name:it.file.displayName||it.file.name, path:it.path, mime:it.file.mime||null, rows, map:autoKind(guessMap(rows), it.file.displayName||it.file.name), cardName:fcard, item:it, replaceFileId:it.replaceFid||null};
+    const nm=it.file.displayName||it.file.name, pr=prepareImport(rows, nm), fcard=cardHint(rows, nm);
+    S.imp={name:nm, path:it.path, mime:it.file.mime||null, rows, map:pr.map, cardName:pr.cardName||fcard, item:it, replaceFileId:it.replaceFid||null};
+    if (pr.fileCharge!==undefined) S.imp.fileCharge=pr.fileCharge;
+    if (pr.auto && S.autoLoad){ const b=buildImport(); saveProfile(b.st.cards); commitImport(b.out,b.fills); markFile(it); continue; }
     if (interactive || S.tab==='import'){ S.tab='import'; render(); }
     else toast(`בתיקייה יש קובץ חדש בפורמט שעוד לא הוגדר: ${it.file.name}`,[{label:'להגדרה',fn:()=>{ S.tab='import'; render(); }}]);
     return;
@@ -2270,8 +2845,14 @@ function renderCats(){
   const T=totals(periodTx());
   const topics={}; cats().forEach(c=>(topics[c.topic] ||= []).push(c));
   app.innerHTML = `
+  ${securityPanelHTML()}
   ${drivePanelHTML()}
   ${projPanelHTML()}
+  <div class="panel" style="margin-bottom:22px">
+    <h2>משכורות בסוף החודש</h2>
+    <label class="chk" style="font-weight:400"><input type="checkbox" id="salOn" ${(S.settings.salaryShift||{}).on!==false?'checked':''}> משכורת שנכנסת מה-<input type="number" id="salDay" min="15" max="31" value="${(S.settings.salaryShift||{}).day||26}" style="width:56px;border:1px solid var(--line);border-radius:8px;padding:2px 6px;background:var(--surface)"> בחודש ואילך נספרת כהכנסה של החודש הבא</label>
+    <p class="muted" style="margin:6px 0 0;font-size:.88rem">חל על תנועות בקטגוריה "משכורת". למשל, משכורת שנכנסה ב-28 בספטמבר תיספר בסך ההכנסות של אוקטובר.</p>
+  </div>
   <div class="panel" style="margin-bottom:22px">
     <h2>מה חובה ומה לא</h2>
     <p class="muted" style="margin-top:0">לכל קטגוריה יש רמת הכרח. אפשר לשנות אותה כאן לכל הקטגוריה, או בתנועה בודדת ברשימת התנועות.</p>
@@ -2322,6 +2903,8 @@ function renderCats(){
       Store.saveSettings(); renderCats(); toast(`הקטגוריה נמחקה${used.length?`. ${used.length} תנועות הועברו ללא מסווג`:''}`);
     });
   });
+  const salSave=()=>{ S.settings.salaryShift={on:app.querySelector('#salOn').checked, day:Math.min(31,Math.max(15,+app.querySelector('#salDay').value||26))}; Store.saveSettings(); bump(); toast('נשמר'); };
+  app.querySelector('#salOn').onchange=salSave; app.querySelector('#salDay').onchange=salSave;
   bindProjPanel();
   app.querySelectorAll('[data-kid]').forEach(row=>{
     const c=cardsList().find(x=>x.id===row.dataset.kid);
@@ -2355,7 +2938,7 @@ function analysis(){
     const days=Math.round((new Date(S.range.to)-new Date(S.range.from))/864e5)+1;
     const pTo=new Date(new Date(S.range.from).getTime()-864e5), pFrom=new Date(pTo.getTime()-(days-1)*864e5);
     const iso=d=>d.toISOString().slice(0,10), pf=iso(pFrom), pt=iso(pTo);
-    const prevList=allTx().filter(t=>t.date>=pf && t.date<=pt);
+    const prevList=allTx().filter(t=>{ const d=repDate(t,S.basis||'charge'); return d>=pf && d<=pt; });
     P=totals(prevList); pN=1; hasPrev=prevList.length>0;
     // compare whole periods: scale current to the same basis
     spanList=window3;
@@ -2377,7 +2960,7 @@ function analysis(){
   // recurring: same normalized description in >=2 months of last 3-4, similar amount
   const span=spanList;
   const byDesc={};
-  span.forEach(m=>monthTx(m).filter(t=>!S.range||inRange(t.date)).filter(t=>t.type==='expense' && !t.inst && !t.excluded).forEach(t=>{ const d=norm(t.desc).replace(/\d+/g,'').trim(); ((byDesc[d] ||= {desc:t.desc,months:{},catId:t.catId}).months[m] ||= []).push(t.amount); }));
+  span.forEach(m=>monthTx(m).filter(t=>!S.range||inRange(repDate(t,S.basis||'charge'))).filter(t=>t.type==='expense' && !t.inst && !t.excluded).forEach(t=>{ const d=norm(t.desc).replace(/\d+/g,'').trim(); ((byDesc[d] ||= {desc:t.desc,months:{},catId:t.catId}).months[m] ||= []).push(t.amount); }));
   const recurring = Object.values(byDesc).map(x=>{ const ms=Object.keys(x.months); if(ms.length<2) return null;
       const per=ms.map(m=>x.months[m].reduce((a,b)=>a+b,0)); const mean=per.reduce((a,b)=>a+b,0)/per.length;
       const stable=per.every(v=>Math.abs(v-mean)<=Math.max(15,mean*0.2)); const cnt=ms.map(m=>x.months[m].length);
@@ -2481,8 +3064,16 @@ function setupExport(){
 /* ================= boot ================= */
 (async()=>{
   const data = await Store.init();
+  try{ VAULT.meta = VAULT.supported() ? await IDB.get('vault') : null; }catch(e){ VAULT.meta=null; }
+  if (VAULT.meta){
+    document.getElementById('app').innerHTML='';
+    const p=await showLock();
+    data.settings=p.settings||data.settings; data.months=p.months||data.months||{};
+    try{ if(p.gclient && !localStorage.getItem('mm-gclient')) localStorage.setItem('mm-gclient',p.gclient); if(p.gfolder && !localStorage.getItem('mm-gfolder')) localStorage.setItem('mm-gfolder',p.gfolder); }catch(e){}
+    setTimeout(updateLockBtn,0);
+  }
   S.settings = normalizeSettings(data.settings);
-  S.months = data.months;
+  S.months = data.months; migrateData(); fixCardsFromFileNames();
   const keys=monthKeys(); S.month = keys.length? keys[keys.length-1] : todayISO().slice(0,7);
   try{ const hp=new URLSearchParams(location.hash.slice(1)); if(hp.get('gclient')) localStorage.setItem('mm-gclient',hp.get('gclient')); if(hp.get('gfolder')) localStorage.setItem('mm-gfolder',parseFolderId(hp.get('gfolder'))); if(hp.get('gclient')||hp.get('gfolder')) history.replaceState(null,'',location.pathname+location.search); }catch(e){}
   updateStatus();
