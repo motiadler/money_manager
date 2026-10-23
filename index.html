@@ -183,6 +183,8 @@ button.link-tag{cursor:pointer}
 .cat-item[open] summary{color:var(--accent)}
 .cat-item .cat-row{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));padding:4px 4px 14px;align-items:end}
 .cat-item .cat-row .kw{grid-column:1/-1}
+.upd{display:flex;align-items:center;gap:10px;margin:10px 0 4px;padding:12px 14px;border-radius:18px;background:var(--surface);box-shadow:var(--shadow);border:2px solid var(--accent)}
+.upd-ico{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);font-size:1.1rem;flex:none}
 .inst-tag{display:inline-block;font-size:.74rem;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;margin-inline-start:6px;white-space:nowrap}
 .prog{height:8px;background:var(--sunk);border-radius:999px;overflow:hidden;min-width:90px}.prog span{display:block;height:100%;background:var(--accent);border-radius:999px}
 .chk{display:flex;gap:8px;align-items:center;font-weight:500;cursor:pointer}
@@ -421,6 +423,7 @@ dialog{background:var(--surface);border-radius:28px}
   </header>
   <div class="status" id="status">טוען…</div>
   <div id="projBanner"></div>
+  <div id="updBanner" hidden></div>
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="overview" aria-selected="true"><span aria-hidden="true">🏠</span>סקירה</button>
     <button role="tab" data-tab="tx" aria-selected="false"><span aria-hidden="true">💳</span>תנועות</button>
@@ -534,6 +537,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
+const APP_VERSION='2026.10.24.1';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -2865,6 +2869,11 @@ function renderSettings(){
     <p class="muted" style="margin-top:0">איך לשייך תנועות לחודשים. אפשר להחליף גם מהבורר שבראש העמוד.</p>
     <div class="seg"><button type="button" data-sb="charge" aria-pressed="${(S.basis||'charge')==='charge'}">💳 לפי מועד חיוב</button><button type="button" data-sb="deal" aria-pressed="${S.basis==='deal'}">🛒 לפי מועד עסקה</button></div>
   </div>
+  <div class="panel" style="margin-bottom:22px">
+    <h2>גרסה ועדכונים</h2>
+    <p style="margin-top:0">הגרסה המותקנת: <strong dir="ltr">${APP_VERSION}</strong>${updFound?` · <span style="color:var(--inc)">קיימת גרסה חדשה ${esc(updFound)}</span>`:''}</p>
+    <button class="btn" id="setUpd">${updFound?'עדכון עכשיו':'בדיקת עדכונים'}</button>
+  </div>
   <div class="panel">
     <h2>ייצוא</h2>
     <p class="muted" style="margin-top:0">שמירת כל התנועות כקובץ CSV שנפתח ב-Excel.</p>
@@ -2874,6 +2883,7 @@ function renderSettings(){
   app.querySelector('#salOn').onchange=salSave; app.querySelector('#salDay').onchange=salSave;
   app.querySelectorAll('[data-sb]').forEach(b=>b.onclick=()=>{ S.basis=b.dataset.sb; render(); });
   app.querySelector('#setExport').onclick=exportCSV;
+  app.querySelector('#setUpd').onclick=()=>{ if(updFound) applyUpdate(); else checkUpdate(true); };
   bindProjPanel();
 }
 function exportCSV(){
@@ -3103,6 +3113,39 @@ function setupExport(){
     try{ await downloadsNs.save({filename:'tnuot-'+todayISO()+'.csv', data:new Blob([csv],{type:'text/csv;charset=utf-8'})}); }catch(e){ if(e.code!=='cancelled' && e.code!=='declined') toast('הייצוא לא הושלם.'); }
   };
 }
+
+/* ================= updates ================= */
+// a home-screen icon keeps serving the cached page; ask the server (bypassing all caches) which version is current
+let updLater=0, updFound=null;
+async function checkUpdate(manual){
+  if (!/^https?:$/.test(location.protocol) || window.self!==window.top){ if(manual) toast('בדיקת עדכונים זמינה רק באתר עצמו.'); return; }
+  try{
+    const r=await fetch(location.pathname+'?check='+Date.now(), {cache:'no-store'});
+    if (!r.ok) throw new Error(r.status);
+    const m=(await r.text()).match(/const APP_VERSION='([^']+)'/);
+    const v=m&&m[1];
+    if (v && v!==APP_VERSION){ updFound=v; if(manual || Date.now()>updLater) showUpdate(v); }
+    else if (manual) toast(`מותקנת הגרסה העדכנית (${APP_VERSION}).`);
+  }catch(e){ if(manual) toast('לא ניתן לבדוק עדכונים כרגע. בדקו את החיבור לאינטרנט.'); }
+}
+function showUpdate(v){
+  const b=document.getElementById('updBanner');
+  b.innerHTML=`<div class="upd"><span class="upd-ico" aria-hidden="true">✨</span><div style="flex:1;min-width:0"><strong>קיימת גרסה חדשה של האפליקציה</strong><div class="muted" style="font-size:.84rem">גרסה ${esc(v)} · הנתונים שלך נשמרים</div></div><button class="btn primary small" id="updGo">עדכון עכשיו</button><button class="icon-btn" id="updLater" aria-label="אחר כך">✕</button></div>`;
+  b.hidden=false;
+  b.querySelector('#updGo').onclick=applyUpdate;
+  b.querySelector('#updLater').onclick=()=>{ b.hidden=true; updLater=Date.now()+3*3600000; };
+}
+async function applyUpdate(){
+  const btn=document.getElementById('updGo'); if(btn){ btn.disabled=true; btn.textContent='מעדכן…'; }
+  try{ await VAULT.flush(); }catch(e){}
+  if (GD.busy && GD.token){ const t0=Date.now(); while(GD.busy && Date.now()-t0<6000) await new Promise(r=>setTimeout(r,200)); }
+  try{ if (window.caches){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); } }catch(e){}
+  // load the new file under a fresh URL so no cached copy is reused
+  location.replace(location.pathname+'?v='+encodeURIComponent(updFound||Date.now())+location.hash);
+}
+setTimeout(()=>checkUpdate(false), 4000);
+setInterval(()=>{ if(document.visibilityState==='visible') checkUpdate(false); }, 30*60000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkUpdate(false); });
 
 /* ================= boot ================= */
 (async()=>{
