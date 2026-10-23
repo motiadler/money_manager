@@ -538,7 +538,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.3';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.4';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -2781,7 +2781,19 @@ async function disableFamily(){
   GD.saveAll(); GD.saveImportSettings(); render(); toast('ההצפנה המשפחתית בוטלה. הנתונים בדרייב יישמרו בלי הצפנה.');
 }
 function familyPanelHTML(){
-  if (ACTIVE!==GD) return '';
+  if (!(ACTIVE===GD && GD.token)){
+    const ok=x=>x?'✅':'⬜';
+    return `<div class="panel" style="margin-bottom:22px;border-color:var(--accent)"><h2>👨‍👩‍👧 שיתוף והצפנה משפחתית</h2>
+      <p style="margin-top:0">כדי להפעיל את ההצפנה המשפחתית ולשתף עם בן או בת הזוג, צריך:</p>
+      <ul style="list-style:none;padding:0;margin:0 0 12px;line-height:2">
+        <li>${ok(VAULT.unlocked())} נעילה פעילה במכשיר (Face ID / קוד)</li>
+        <li>${ok(ACTIVE===GD && GD.token)} מחובר ל-Google Drive בפתיחה הנוכחית</li>
+        <li>${ok(ACTIVE===GD && GD.canEdit)} הרשאת עריכה לתיקייה המשותפת</li>
+      </ul>
+      ${FAMILY.raw?'<p class="muted" style="font-size:.88rem">קוד משפחה כבר שמור במכשיר הזה.</p>':''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${GD.clientId()&&GD.folderId()?'<button class="btn primary" id="famConnect">התחברות ל-Google Drive</button>':'<span class="muted" style="font-size:.9rem">הגדירו קודם את החיבור ל-Google Drive בחלון שלמעלה.</span>'}</div>
+      <p class="muted" style="font-size:.86rem;margin:10px 0 0">ההתחברות ל-Google נדרשת בכל פתיחה של האפליקציה (Google לא מאפשרת לשמור אותה). אחרי ההתחברות יופיעו כאן כפתורי ההצפנה והשיתוף.</p></div>`;
+  }
   const st = FAMILY.enabled ? (FAMILY.key?'✅ הנתונים בתיקייה המשותפת מוצפנים, והקוד שמור במכשיר הזה.':'🔑 הנתונים בתיקייה המשותפת מוצפנים, אבל במכשיר הזה עוד אין את קוד המשפחה.') : 'הנתונים בתיקייה המשותפת נשמרים בלי הצפנה (מוגנים בחשבונות Google).';
   return `<div class="panel" style="margin-bottom:22px${FAMILY.enabled&&!FAMILY.key?';border-color:var(--imp)':''}"><h2>👨‍👩‍👧 שיתוף והצפנה משפחתית</h2>
     <p style="margin-top:0">${st}</p>
@@ -2798,6 +2810,7 @@ function familyPanelHTML(){
 function bindFamily(){
   const q=s=>app.querySelector(s);
   q('#famOn')?.addEventListener('click',enableFamily);
+  q('#famConnect')?.addEventListener('click',driveConnect);
   q('#famShow')?.addEventListener('click',showFamilyCode);
   q('#famOff')?.addEventListener('click',e=>{ const b=e.currentTarget; if(!b.dataset.sure){ b.dataset.sure='1'; b.textContent='לבטל? לחצו שוב'; return; } disableFamily(); });
   q('#famEnter')?.addEventListener('click',async()=>{ const raw=b32dec(q('#famCode').value); if(raw.length!==32){ toast('הקוד לא שלם. בדקו שהעתקתם את כולו.'); return; } if(await adoptFamilyKey(raw)){ try{ await activateBackend(GD,true); }catch(e){ toast(driveErr(e)); } } });
