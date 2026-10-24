@@ -544,7 +544,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.6';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.7';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -1281,19 +1281,44 @@ function bindCommon(){
 }
 
 /* ---------- import ---------- */
-function decodeText(buf){
+// Israeli bank exports come in many shapes: real Excel, old Excel (BIFF) without a code page,
+// or text/HTML saved as ".xls" in Windows-1255, UTF-8 or UTF-16. Detect by content, not by file name.
+function decodeText(buf, enc){
+  const b=new Uint8Array(buf);
+  if (enc && enc!=='auto'){ try{ return new TextDecoder(enc).decode(buf).replace(/^\uFEFF/,''); }catch(e){} }
+  if (b[0]===0xFF && b[1]===0xFE) return new TextDecoder('utf-16le').decode(buf).replace(/^\uFEFF/,'');
+  if (b[0]===0xFE && b[1]===0xFF) return new TextDecoder('utf-16be').decode(buf).replace(/^\uFEFF/,'');
+  // UTF-16 without BOM: every other byte is zero
+  let z=0; for (let i=1;i<Math.min(b.length,400);i+=2) if(b[i]===0) z++;
+  if (z>60) return new TextDecoder('utf-16le').decode(buf);
   try{ return new TextDecoder('utf-8',{fatal:true}).decode(buf).replace(/^\uFEFF/,''); }
   catch(e){ try{ return new TextDecoder('windows-1255').decode(buf); }catch(_){ return new TextDecoder().decode(buf); } }
 }
-async function readFile(file){
+// repair Hebrew that was decoded with the wrong code page
+function fixHeb(s){
+  if (typeof s!=='string' || /[\u0590-\u05FF]/.test(s)) return s;
+  if (/×[\u0080-\u00BF]/.test(s) && [...s].every(c=>c.charCodeAt(0)<256)){   // UTF-8 bytes read as Latin-1
+    try{ return new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from([...s].map(c=>c.charCodeAt(0)))); }catch(e){}
+  }
+  if (/[\u00E0-\u00FA]{2,}/.test(s)) return s.replace(/[\u00E0-\u00FA]/g, c=>String.fromCharCode(0x05D0 + c.charCodeAt(0)-0xE0));   // Windows-1255 read as Latin-1
+  return s;
+}
+async function readFile(file, enc){
   if (typeof XLSX==='undefined') throw new Error('ספריית קריאת הקבצים לא נטענה. רעננו את העמוד ונסו שוב.');
-  const buf = await file.arrayBuffer();
-  const isText = /\.(csv|txt|tsv)$/i.test(file.name);
-  const wb = isText ? XLSX.read(decodeText(buf),{type:'string',raw:true}) : XLSX.read(buf,{type:'array',cellDates:true});
+  const buf = await file.arrayBuffer(), b=new Uint8Array(buf);
+  const isZip = b[0]===0x50 && b[1]===0x4B;                                   // .xlsx
+  const isOle = b[0]===0xD0 && b[1]===0xCF && b[2]===0x11 && b[3]===0xE0;     // old binary .xls
+  let wb;
+  if (isZip) wb=XLSX.read(buf,{type:'array',cellDates:true});
+  else if (isOle) wb=XLSX.read(buf,{type:'array',cellDates:true, codepage: enc==='utf-8'?65001:1255});
+  else wb=XLSX.read(decodeText(buf, enc),{type:'string',raw:true});           // CSV, TSV, or HTML table saved as .xls
   // read every sheet; sections and repeated header rows are handled in buildImport
   let rows=[], sheets=0;
   wb.SheetNames.forEach(n=>{ const r=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''}).filter(x=>x.some(c=>String(c).trim()!=='')); if(r.length){ sheets++; rows=rows.concat(r); } });
+  rows=rows.map(r=>r.map(c=>typeof c==='string' ? fixHeb(c.replace(/\u00A0/g,' ')) : c));
   rows.sheets=sheets;
+  rows.bad = rows.slice(0,40).flat().filter(c=>typeof c==='string' && /\uFFFD/.test(c)).length;
+  rows.kind = isZip?'xlsx':isOle?'xls':'text';
   return rows;
 }
 const H_DATE=/תאריך|date/i, H_DESC=/תיאור|בית העסק|בית עסק|שם העסק|פרטים|description|merchant|פעולה|אסמכתא תיאור/i,
@@ -1391,6 +1416,8 @@ function buildImport(){
   // a card statement whose file name holds the card number: every row belongs to that card
   const nameCard = (m.kind==='credit' && I.nameInfo.digits && !I.cardManual) ? 'כרטיס '+I.nameInfo.digits : '';
   if (nameCard) I.cardName = nameCard;
+  // a bank file: 4 digits in its name are an account number, not a card
+  if (m.kind==='bank' && !I.cardManual && /^כרטיס \d{4}$/.test(I.cardName||'')) I.cardName='חשבון בנק';
   const existing=new Map(allTx().filter(t=>!I.replaceFileId || t.fileId!==I.replaceFileId).map(t=>[t.date+'|'+norm(t.desc)+'|'+t.amount.toFixed(2)+'|'+t.type+'|'+norm(cardName(t.card)), t]));
   let skipped=0, dup=0, cardSkip=0;
   const st={sections:1, sheets:I.rows.sheets||1, dates:[], instRows:0, instDerived:0, cards:new Set(), branches:new Set(), extraCols:new Set(), foreign:0, sectionNames:[]};
@@ -1600,6 +1627,7 @@ function renderImport(){
       ${m.kind==='credit'?`<p class="muted" style="margin:8px 0 0;font-size:.9rem">בקובץ אשראי: כל חיוב הוא הוצאה. סכומים במינוס (זיכויים והחזרים) נקלטים כהכנסה.</p>`:''}
     </div>
     <div class="map-grid">
+      ${I.srcFile && I.rows.kind!=='xlsx' ? `<div class="field"><label for="mEnc">קידוד הטקסט בקובץ</label><select id="mEnc">${[['auto','אוטומטי'],['windows-1255','עברית ישנה (Windows-1255)'],['utf-8','UTF-8'],['utf-16le','UTF-16']].map(([v,l])=>`<option value="${v}" ${(I.enc||'auto')===v?'selected':''}>${l}</option>`).join('')}</select></div>` : ''}
       <div class="field"><label>שורת הכותרות</label><select id="mHi">${I.rows.slice(0,25).map((r,i)=>`<option value="${i}" ${i===m.hi?'selected':''}>שורה ${i+1}: ${esc(r.filter(Boolean).slice(0,3).join(' | ').slice(0,40))}</option>`).join('')}</select></div>
       <div class="field"><label>עמודת תאריך</label><select id="mDate">${colOpts(m.date)}</select></div>
       <div class="field"><label>עמודת תיאור</label><select id="mDesc">${colOpts(m.desc)}</select></div>
@@ -1619,6 +1647,7 @@ function renderImport(){
       <div class="field"><label for="impCard">${(m.kind==='credit' && I.nameInfo && I.nameInfo.digits && !I.cardManual)?'כרטיס (נלקח משם הקובץ, לכל השורות)':m.cardCol>-1?'כרטיס לשורות בלי מספר':'מאיזה כרטיס או חשבון הקובץ'}</label>
         <input id="impCard" list="cardList" value="${esc(I.cardName||'')}" placeholder="${m.kind==='bank'?'למשל: חשבון בנק לאומי':'למשל: ויזה 4417'}"><datalist id="cardList">${cardsList().map(c=>`<option value="${esc(c.name)}">`).join('')}</datalist></div>
     </div>
+    ${I.rows.bad?`<p style="margin:10px 0 0;padding:8px 12px;border-radius:10px;background:var(--exp-soft)">⚠️ חלק מהטקסט בקובץ לא נקרא כראוי. בחרו קידוד אחר בשדה "קידוד הטקסט בקובץ".</p>`:''}
     ${analysisHTML(st, out)}
     <p style="margin:6px 0 14px"><strong>${out.length}</strong> תנועות מוכנות לקליטה: ${fmt(exp)} הוצאות, ${fmt(inc)} הכנסות.${out.some(t=>t.inst)?` ${out.filter(t=>t.inst).length} מהן חיובים בתשלומים.`:''}
       <span class="muted">${dup?` ${dup} כבר קיימות ויידלגו.`:''}${skipped?` ${skipped} שורות ללא תאריך/סכום יידלגו.`:''}${cardSkip?` ${cardSkip} חיובי כרטיס אשראי יקושרו לקובצי הפירוט.`:''}${uncat?` ${uncat} לא זוהו ויסומנו כלא מסווגות.`:''}</span></p>
@@ -1631,6 +1660,10 @@ function renderImport(){
   </tbody></table></div>${out.length>40?`<p class="muted">ועוד ${out.length-40}…</p>`:''}`
   :`<div class="panel empty" style="margin-top:18px"><strong>לא נמצאו תנועות</strong>בדקו שבחרתם את שורת הכותרות ואת עמודות התאריך והסכום הנכונות.</div>`}`;
   const num = id => +app.querySelector(id).value;
+  app.querySelector('#mEnc')?.addEventListener('change',async e=>{
+    try{ const enc=e.target.value; const rows=await readFile(I.srcFile, enc); const pr=prepareImport(rows, I.name); Object.assign(I,{rows, enc, map:pr.map, fileCharge:undefined}); renderImport(); toast(rows.bad?'עדיין יש תווים לא תקינים. נסו קידוד אחר.':'הקובץ נקרא מחדש'); }
+    catch(x){ toast('לא הצלחתי לקרוא את הקובץ בקידוד הזה.'); }
+  });
   app.querySelector('#mHi').onchange=e=>{ const k=m.kind, sc=m.skipCardCharges; S.imp.map=enrichMap(guessMap(I.rows, +e.target.value), I.rows); if(k){ S.imp.map.skipCardCharges=sc; setKind(S.imp.map,k); } S.imp.map.source='auto'; renderImport(); };
   app.querySelector('#mRedetect')?.addEventListener('click',()=>{ S.imp.map=enrichMap(autoKind(guessMap(I.rows), I.name), I.rows); S.imp.map.source='auto'; I.fileCharge=undefined; renderImport(); toast('ההגדרות זוהו מחדש מתוך הנתונים'); });
   app.querySelector('#mShare')?.addEventListener('change',e=>{ I.shareProfile=e.target.checked; });
@@ -1678,7 +1711,7 @@ async function handleFile(file, replaceId){
     const rows=await readFile(file);
     if(rows.length<2){ toast('הקובץ ריק או שאין בו טבלה שאפשר לקרוא.'); return; }
     const pr=prepareImport(rows, file.name);
-    S.batch=null; S.imp={name:file.name, path:'upload:'+file.name, rows, map:pr.map, cardName:pr.cardName||cardHint(rows,file.name)||'', replaceFileId:replaceId||null};
+    S.batch=null; S.imp={srcFile:file, name:file.name, path:'upload:'+file.name, rows, map:pr.map, cardName:pr.cardName||cardHint(rows,file.name)||'', replaceFileId:replaceId||null};
     if (pr.fileCharge!==undefined) S.imp.fileCharge=pr.fileCharge;
     S.tab='import'; render();
   }catch(e){ toast(e.message && /ספרייה|ספריית/.test(e.message)? e.message : 'לא הצלחתי לקרוא את הקובץ. ודאו שזה Excel או CSV.'); }
@@ -3013,7 +3046,7 @@ async function processQueue(interactive){
     try{ rows=await readFile(it.file); }catch(e){ markFile(it); continue; }
     if (rows.length<2){ markFile(it); continue; }
     const nm=it.file.displayName||it.file.name, pr=prepareImport(rows, nm), fcard=cardHint(rows, nm);
-    S.imp={name:nm, path:it.path, mime:it.file.mime||null, rows, map:pr.map, cardName:pr.cardName||fcard, item:it, replaceFileId:it.replaceFid||null};
+    S.imp={srcFile:it.file, name:nm, path:it.path, mime:it.file.mime||null, rows, map:pr.map, cardName:pr.cardName||fcard, item:it, replaceFileId:it.replaceFid||null};
     if (pr.fileCharge!==undefined) S.imp.fileCharge=pr.fileCharge;
     if (pr.auto && S.autoLoad){ const b=buildImport(); saveProfile(b.st.cards); commitImport(b.out,b.fills); markFile(it); continue; }
     if (interactive || S.tab==='import'){ S.tab='import'; render(); }
