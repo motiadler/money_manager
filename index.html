@@ -4,9 +4,15 @@
 <meta charset="utf-8">
 <meta name="theme-color" content="#D3E0EC">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="הכסף שלי">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="תזרים">
+<meta name="application-name" content="תזרים">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<title>הכסף שלי · ניהול הכנסות והוצאות</title>
+<title>תזרים · ניהול הכנסות והוצאות</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -397,7 +403,7 @@ dialog{background:var(--surface);border-radius:28px}
 <body>
 <div class="wrap">
   <header class="top">
-    <h1 class="brand"><span>הכסף שלי<small>ניהול הכנסות והוצאות פשוט וברור</small></span></h1>
+    <h1 class="brand"><span>תזרים<small>ניהול הכנסות והוצאות פשוט וברור</small></span></h1>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <div class="seg" role="group" aria-label="תקופה" id="pmSeg">
         <button type="button" data-pm="month" aria-pressed="true">חודש</button>
@@ -538,7 +544,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.4';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.6';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -2205,8 +2211,8 @@ async function unlockWithPin(pin){ const p=VAULT.meta.pin; const kek=await pinKE
 async function passkeyPRF(credId, prfSalt, create){
   if (create){
     const cred=await navigator.credentials.create({publicKey:{
-      challenge:crypto.getRandomValues(new Uint8Array(32)), rp:{name:'הכסף שלי', id:location.hostname},
-      user:{id:crypto.getRandomValues(new Uint8Array(16)), name:'money-manager@'+location.hostname, displayName:'הכסף שלי'},
+      challenge:crypto.getRandomValues(new Uint8Array(32)), rp:{name:'תזרים', id:location.hostname},
+      user:{id:crypto.getRandomValues(new Uint8Array(16)), name:'money-manager@'+location.hostname, displayName:'תזרים'},
       pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
       authenticatorSelection:{authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred'},
       timeout:60000, extensions:{prf:{eval:{first:prfSalt}}}}});
@@ -2274,7 +2280,7 @@ function showLock(){
     const m=VAULT.meta, el=document.createElement('div'); el.id='lockScreen';
     el.innerHTML=`<div class="lock-card">
       <div class="lock-logo">₪</div>
-      <h2 style="margin:10px 0 4px">הכסף שלי</h2>
+      <h2 style="margin:10px 0 4px">תזרים</h2>
       <p class="muted" style="margin:0 0 18px">🔒 הנתונים שמורים במכשיר בצורה מוצפנת</p>
       ${m.bio && VAULT.bioSupported()?'<button class="btn primary" id="lkBio" style="width:100%;padding:14px;font-size:1.05rem">פתיחה עם Face ID</button><div class="lock-or"><span>או קוד אישי</span></div>':''}
       <form id="lkForm" style="display:flex;gap:8px"><input id="lkPin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="קוד אישי" aria-label="קוד אישי" style="flex:1;min-width:0;width:100%;text-align:center;font-size:1.1rem;letter-spacing:.3em;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--surface)"><button class="btn ${m.bio?'':'primary'}" id="lkGo">פתיחה</button></form>
