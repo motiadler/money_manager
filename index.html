@@ -194,6 +194,11 @@ button.link-tag{cursor:pointer}
 .upd-ico{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);font-size:1.1rem;flex:none}
 .by-tag{display:inline-block;font-size:.74rem;font-weight:600;color:var(--sand,#C3913B);background:var(--sand-soft,#F3E6C9);border-radius:999px;padding:1px 8px;margin-inline-start:6px;white-space:nowrap}
 button.inst-tag{border:0;cursor:pointer;font-family:inherit}
+.ins-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.ins{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border-radius:20px;padding:14px 16px;box-shadow:var(--shadow);border-inline-start:5px solid var(--tone)}
+.ins-ico{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--tone-soft);font-size:1.2rem;flex:none}
+.ins-title{font-family:var(--display);font-weight:600;font-size:1.02rem;line-height:1.3}
+.ins-text{color:var(--muted);font-size:.9rem;margin-top:3px}
 .shift-btn{border:1px dashed var(--inc);background:transparent;color:var(--inc);border-radius:999px;padding:0 8px;font:inherit;font-size:.74rem;font-weight:600;cursor:pointer;margin-inline-start:6px;white-space:nowrap}
 .shift-btn:hover{background:var(--inc-soft)}
 .inst-tag{display:inline-block;font-size:.74rem;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;margin-inline-start:6px;white-space:nowrap}
@@ -443,7 +448,7 @@ dialog{background:var(--surface);border-radius:28px}
     <button role="tab" data-tab="import" aria-selected="false"><span aria-hidden="true">📥</span>ייבוא מקובץ</button>
     <button role="tab" data-tab="cats" aria-selected="false"><span aria-hidden="true">🏷️</span>קטגוריות וכרטיסים</button>
     <button role="tab" data-tab="settings" aria-selected="false"><span aria-hidden="true">⚙️</span>הגדרות</button>
-    <button role="tab" data-tab="save" aria-selected="false"><span aria-hidden="true">💡</span>איך לחסוך</button>
+    <button role="tab" data-tab="save" aria-selected="false"><span aria-hidden="true">💡</span>תובנות</button>
   </nav>
   <main id="app"><div class="loading">טוען את הנתונים שלך…</div></main>
 </div>
@@ -538,7 +543,7 @@ dialog{background:var(--surface);border-radius:28px}
   <button data-tab="tx" aria-selected="false"><span aria-hidden="true">💳</span>תנועות</button>
   <button data-tab="inst" aria-selected="false"><span aria-hidden="true">🧾</span>תשלומים</button>
   <button data-tab="loans" aria-selected="false"><span aria-hidden="true">🏦</span>הלוואות</button>
-  <button data-tab="save" aria-selected="false"><span aria-hidden="true">💡</span>חיסכון</button>
+  <button data-tab="save" aria-selected="false"><span aria-hidden="true">💡</span>תובנות</button>
   <button data-tab="import" aria-selected="false"><span aria-hidden="true">📥</span>ייבוא</button>
   <button data-tab="cats" aria-selected="false"><span aria-hidden="true">🏷️</span>קטגוריות וכרטיסים</button>
   <button data-tab="settings" aria-selected="false"><span aria-hidden="true">⚙️</span>הגדרות</button>
@@ -549,7 +554,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.9';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.10';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -3255,10 +3260,10 @@ function analysis(){
   } else {
     const k=S.month, prev=[shiftMonth(k,-1),shiftMonth(k,-2),shiftMonth(k,-3)];
     window3=[k,prev[0],prev[1]].filter(m=>monthTx(m).length);
-    nM=Math.max(1,window3.length); winList=window3.flatMap(monthTx);
+    nM=Math.max(1,window3.length); winList=window3.flatMap(m=>monthTx(m));
     cur=totals(monthTx(k));
     const prevMonths=prev.filter(m=>monthTx(m).length);
-    P=totals(prevMonths.flatMap(monthTx)); pN=Math.max(1,prevMonths.length); hasPrev=prevMonths.length>0;
+    P=totals(prevMonths.flatMap(m=>monthTx(m))); pN=Math.max(1,prevMonths.length); hasPrev=prevMonths.length>0;
     spanList=[k,...prev].filter(m=>monthTx(m).length);
   }
   const W=totals(winList);
@@ -3339,7 +3344,66 @@ function renderSave(){
   cut.oninput=()=>{ S.cut=+cut.value; const p=optAvg*S.cut/100+impAvg*Math.min(S.cut,15)/100; app.querySelector('#cutVal').textContent=S.cut+'%'; app.querySelector('#savNum').textContent=fmt(p); app.querySelector('#savYear').textContent=fmt(p*12); };
   app.querySelectorAll('[data-rhist]').forEach(b=>b.onclick=()=>openMerchant(A.recurring[+b.dataset.rhist].desc,'expense'));
   app.querySelectorAll('[data-rec]').forEach(b=>b.onclick=()=>{ const r=A.recurring[+b.dataset.rec]; const txs=sameNameTx(r.desc,'expense',[]); if(txs.length) pickForTx(txs,{groupLabel:`כל ${txs.length} החיובים בשם הזה`}); });
+  app.insertAdjacentHTML('afterbegin', insightsHTML() + '<h2 style="margin:24px 0 12px">💰 המלצות לחיסכון</h2>');
+  bindInsights();
   setupAI(A); setupExport();
+}
+let INS=[];
+function insights(){
+  const out=[], cur=totals(periodTx()), k=S.month, word=periodWord();
+  const prevKs=S.range?[]:[1,2,3].map(i=>shiftMonth(k,-i)).filter(m=>monthTx(m).length);
+  const prevT=prevKs.map(m=>totals(monthTx(m)));
+  const avg=f=>prevT.length ? prevT.reduce((a,t)=>a+f(t),0)/prevT.length : null;
+  const exps=periodTx().filter(t=>!t.excluded && effKind(t)==='expense' && t.type==='expense' && !(isCardChargeRow(t) && chargeLinked(t))).sort((a,b)=>b.amount-a.amount);
+  // spending vs usual
+  const ae=avg(t=>t.exp);
+  if (ae>0){ const d=(cur.exp-ae)/ae*100; if (Math.abs(d)>=10) out.push({ico:d>0?'📈':'📉', tone:d>0?'bad':'good', title:d>0?`ההוצאות גבוהות ב-${Math.round(d)}% מהרגיל`:`ההוצאות נמוכות ב-${Math.round(-d)}% מהרגיל`, text:`${fmt(cur.exp)} ${word} לעומת ממוצע של ${fmt(ae)} ב-${prevT.length} החודשים הקודמים.`}); }
+  // month in progress: forecast
+  if (!S.range && k===todayISO().slice(0,7)){ const day=+todayISO().slice(8,10), dim=new Date(+k.slice(0,4),+k.slice(5,7),0).getDate();
+    if (day>=5 && day<dim && cur.exp>0){ const proj=cur.essential+(cur.exp-cur.essential)/day*dim;   // fixed "must" costs don't grow with the days
+      out.push({ico:'🔮', tone:ae&&proj>ae*1.1?'bad':'mid', title:`צפי לסוף החודש: כ-${fmt(proj)} הוצאות`, text:`הוצאות החובה כפי שהן, ושאר ההוצאות לפי הקצב ב-${day} הימים הראשונים${ae?`. ממוצע החודשים הקודמים: ${fmt(ae)}`:''}.`}); } }
+  // savings rate
+  if (cur.inc){ const r=Math.round((cur.inc-cur.exp)/cur.inc*100), pr=avg(t=>t.inc?(t.inc-t.exp)/t.inc*100:0);
+    out.push({ico:r>=10?'🎯':'🪫', tone:r>=10?'good':r>=0?'mid':'bad', title:`שיעור חיסכון ${r}%`, text: pr!=null ? `בחודשים הקודמים: ${Math.round(pr)}% בממוצע.` : (r>=20?'מעל היעד המקובל של 20%.':'יעד מקובל: לפחות 10%–20% מההכנסה.')}); }
+  // biggest category jump
+  if (prevT.length){ const rows=Object.entries(cur.byCat).map(([id,v])=>({id,v,a:avg(t=>t.byCat[id]||0)})).filter(x=>x.v-x.a>=150 && x.v>x.a*1.3 && x.id!=='uncat').sort((a,b)=>(b.v-b.a)-(a.v-a.a));
+    rows.slice(0,2).forEach(x=>out.push({ico:'⚠️', tone:'bad', title:`${catById(x.id).name}: ${fmt(x.v-x.a)} יותר מהרגיל`, text:`${fmt(x.v)} ${word} לעומת ממוצע של ${fmt(x.a)}.`, act:{label:'לתנועות', cat:x.id}})); }
+  // budgets
+  cats().filter(c=>c.budget>0 && c.kind==='expense').map(c=>({c, v:cur.byCat[c.id]||0, b:c.budget*(S.range?periodLenMonths():1)})).filter(x=>x.v>=x.b*0.8).sort((a,b)=>b.v/b.b-a.v/a.b).slice(0,2)
+    .forEach(x=>out.push({ico:x.v>x.b?'🚨':'⏳', tone:x.v>x.b?'bad':'mid', title:x.v>x.b?`חריגה בתקציב ${x.c.name}`:`${x.c.name}: ${Math.round(x.v/x.b*100)}% מהתקציב`, text:`${fmt(x.v)} מתוך ${fmt(x.b)}.`, act:{label:'לתנועות', cat:x.c.id}}));
+  // committed next month
+  const nl=nextLoad(), lm=loanList().filter(l=>!l.done).reduce((a,l)=>a+l.monthly,0), inc=cur.inc||avg(t=>t.inc)||0;
+  if (nl+lm>0) out.push({ico:'🧾', tone:inc && (nl+lm)/inc>0.3?'bad':'mid', title:`בחודש הבא כבר מחויבים ${fmt(nl+lm)}`, text:`${nl?fmt(nl)+' בתשלומים':''}${nl&&lm?' ו-':''}${lm?fmt(lm)+' בהלוואות':''}${inc?` · ${Math.round((nl+lm)/inc*100)}% מההכנסה`:''}.`, act:{label:'לתשלומים', tab:nl?'inst':'loans'}});
+  // largest expense
+  if (exps[0]) out.push({ico:'💸', tone:'mid', title:`ההוצאה הגדולה ${word}: ${fmt(exps[0].amount)}`, text:`${exps[0].desc} · ${fmtD(exps[0].date)} · ${catById(exps[0].catId).name}`, act:{label:'כל העסקאות שם', merch:exps[0]}});
+  // most frequent place
+  const fq={}; exps.forEach(t=>{ const kk=merchKey(t.desc); const o=(fq[kk] ||= {n:0,s:0,t}); o.n++; o.s+=t.amount; });
+  const top=Object.values(fq).sort((a,b)=>b.n-a.n)[0];
+  if (top && top.n>=4) out.push({ico:'🔁', tone:'mid', title:`${top.t.desc}: ${top.n} פעמים ${word}`, text:`בסך ${fmt(top.s)}, כ-${fmt(top.s/top.n)} בכל פעם.`, act:{label:'כל העסקאות שם', merch:top.t}});
+  // eating out
+  const food=(cur.byCat.grocery||0)+(cur.byCat.eatout||0)+(cur.byCat.coffee||0), outside=(cur.byCat.eatout||0)+(cur.byCat.coffee||0);
+  if (food>500 && outside/food>=0.35) out.push({ico:'🍽️', tone:'mid', title:`${Math.round(outside/food*100)}% מהוצאות האוכל מחוץ לבית`, text:`${fmt(outside)} על מסעדות, משלוחים ובתי קפה, מתוך ${fmt(food)} על אוכל. כל 10% פחות חוסכים כ-${fmt(outside*0.1*12)} בשנה.`});
+  // subscriptions
+  const subs=analysis().recurring; const subsY=subs.reduce((a,r)=>a+r.monthly*12,0);
+  if (subs.length>=2) out.push({ico:'📺', tone:'mid', title:`${subs.length} חיובים קבועים: ${fmt(subsY)} בשנה`, text:'כדאי לעבור עליהם פעם ברבעון ולבטל את מה שלא בשימוש. הרשימה המלאה למטה.'});
+  // weekends
+  const we=exps.filter(t=>{ const d=new Date(effDate(t,S.basis||'charge')+'T12:00:00').getDay(); return d===5||d===6; }).reduce((a,t)=>a+t.amount,0);
+  if (cur.exp>1500 && we/cur.exp>0.4) out.push({ico:'🗓️', tone:'mid', title:`${Math.round(we/cur.exp*100)}% מההוצאות בסופי שבוע`, text:`${fmt(we)} בימי שישי ושבת.`});
+  // uncategorized
+  if ((cur.byCat.uncat||0)>0) out.push({ico:'🏷️', tone:'mid', title:`${fmt(cur.byCat.uncat)} עדיין לא מסווגים`, text:'סיווג התנועות האלה ישפר את התובנות והתקציב.', act:{label:'לסיווג', cat:'uncat'}});
+  return out;
+}
+function insightsHTML(){
+  INS=insights();
+  if (!INS.length) return `<h2 style="margin:0 0 12px">💡 תובנות</h2><div class="panel empty" style="margin-bottom:8px"><strong>עוד אין מספיק נתונים לתובנות</strong>אחרי חודש־חודשיים של נתונים יופיעו כאן השוואות, צפי וחריגות.</div>`;
+  return `<h2 style="margin:0 0 12px">💡 תובנות ${S.range?'לתקופה':'ל'+monthName(S.month)}</h2>
+  <div class="ins-grid">${INS.map((x,i)=>`<div class="ins tone-${x.tone}"><span class="ins-ico" aria-hidden="true">${x.ico}</span><div style="min-width:0"><div class="ins-title">${esc(x.title)}</div><div class="ins-text">${esc(x.text)}</div>${x.act?`<button class="btn small" data-ins="${i}" style="margin-top:8px">${x.act.label}</button>`:''}</div></div>`).join('')}</div>`;
+}
+function bindInsights(){
+  app.querySelectorAll('[data-ins]').forEach(b=>b.onclick=()=>{ const a=INS[+b.dataset.ins].act;
+    if (a.merch) return openMerchant(a.merch.desc, a.merch.type);
+    if (a.tab){ S.tab=a.tab; return render(); }
+    if (a.cat){ S.filters={q:'',type:'',nec:'',cat:a.cat,topic:''}; S.tab='tx'; render(); } });
 }
 let sampleNs=null, downloadsNs=null;
 function setupAI(A){
