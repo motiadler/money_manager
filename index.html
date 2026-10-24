@@ -192,6 +192,9 @@ button.link-tag{cursor:pointer}
 .upd{display:flex;align-items:center;gap:10px;margin:10px 0 4px;padding:12px 14px;border-radius:18px;background:var(--surface);box-shadow:var(--shadow);border:2px solid var(--accent)}
 .upd-ico{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);font-size:1.1rem;flex:none}
 .by-tag{display:inline-block;font-size:.74rem;font-weight:600;color:var(--sand,#C3913B);background:var(--sand-soft,#F3E6C9);border-radius:999px;padding:1px 8px;margin-inline-start:6px;white-space:nowrap}
+button.inst-tag{border:0;cursor:pointer;font-family:inherit}
+.shift-btn{border:1px dashed var(--inc);background:transparent;color:var(--inc);border-radius:999px;padding:0 8px;font:inherit;font-size:.74rem;font-weight:600;cursor:pointer;margin-inline-start:6px;white-space:nowrap}
+.shift-btn:hover{background:var(--inc-soft)}
 .inst-tag{display:inline-block;font-size:.74rem;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;margin-inline-start:6px;white-space:nowrap}
 .prog{height:8px;background:var(--sunk);border-radius:999px;overflow:hidden;min-width:90px}.prog span{display:block;height:100%;background:var(--accent);border-radius:999px}
 .chk{display:flex;gap:8px;align-items:center;font-weight:500;cursor:pointer}
@@ -512,6 +515,7 @@ dialog{background:var(--surface);border-radius:28px}
       <div class="field"><label for="fCard">כרטיס / אמצעי תשלום</label><select id="fCard"></select></div>
       <div class="field" id="fCardNewWrap" hidden><label for="fCardNew">שם הכרטיס החדש</label><input id="fCardNew" placeholder="למשל: ויזה 4417"></div>
       <div class="field" style="grid-column:1/-1"><label class="chk"><input type="checkbox" id="fIncl" checked> לכלול את התנועה בדוחות ובסיכומים</label></div>
+      <div class="field" style="grid-column:1/-1" id="fShiftWrap" hidden><label class="chk"><input type="checkbox" id="fShift"> לשייך את ההכנסה לחודש הבא (למשל משכורת שנכנסה לפני סוף החודש)</label></div>
       <div class="field" style="grid-column:1/-1"><label class="chk"><input type="checkbox" id="fInstOn"> החיוב הוא חלק מעסקה בתשלומים</label></div>
       <div id="fInstWrap" hidden style="grid-column:1/-1"><div class="form-grid">
         <div class="field"><label for="fInstN">תשלום מספר</label><input type="number" id="fInstN" min="1" max="72" inputmode="numeric"></div>
@@ -544,7 +548,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.7';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.8';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -722,7 +726,10 @@ function buildIdx(){
 function idx(){ if(!IDX || IDX.ver!==dataVer) buildIdx(); return IDX; }
 function linkedChargeOf(t){ if(!isCreditRow(t)) return null; const I=IDX&&IDX.ver===dataVer?IDX:idx(); const bid=I.stmtTo[stmtKeyOf(t)]; return bid ? I.byId.get(bid) : null; }
 function chargeLinked(t){ return !!idx().linkOf[t.id]; }
-function salaryShifted(t){ const s=S.settings.salaryShift||{}; return s.on!==false && t.type==='income' && t.catId==='salary' && +t.date.slice(8,10) >= (s.day||26); }
+// a salary that arrives at the end of the month belongs to the next month; the user can also set it per transaction
+function autoShift(t){ const s=S.settings.salaryShift||{}; return s.on!==false && effKind(t)==='income' && t.catId==='salary' && +t.date.slice(8,10) >= (s.day||26); }
+function salaryShifted(t){ if (t.shiftNext===true) return effKind(t)==='income'; if (t.shiftNext===false) return false; return autoShift(t); }
+function setShift(t, on){ updateTx(t.id,{shiftNext: on===autoShift(t) ? undefined : on}); }
 function effDate(t, basis){ if (basis==='deal') return t.purchaseDate || t.date; const lc=linkedChargeOf(t); return lc ? lc.date : (t.chargeDate || t.date); }
 function repDate(t, basis){ return salaryShifted(t) ? shiftMonth(t.date.slice(0,7),1)+'-01' : effDate(t,basis); }
 function repMonth(t, basis){ return repDate(t,basis).slice(0,7); }
@@ -1093,7 +1100,7 @@ function renderTx(){
     <thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th>הכרח</th><th>כרטיס</th><th style="text-align:center">בדוחות</th><th style="text-align:left">סכום</th><th><span class="sr" style="position:absolute;left:-9999px">פעולות</span></th></tr></thead>
     <tbody>${list.map(t=>`<tr data-id="${t.id}" class="${t.catId==='uncat'?'uncat':''} ${t.excluded?'is-excl':''}">
       <td class="td-date" style="white-space:nowrap">${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?`<div class="muted" style="font-size:.76rem">${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}</div>`:''; })()}</td>
-      <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${(t.byE && t.byE!==me().email)?`<span class="by-tag" title="${esc(t.byE)}">👤 ${esc(t.by||t.byE)}</span>`:''}${salaryShifted(t)?`<span class="inst-tag">נספרת ב${monthName(repMonth(t,'charge'))}</span>`:''}${linkTagHTML(t)}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
+      <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${(t.byE && t.byE!==me().email)?`<span class="by-tag" title="${esc(t.byE)}">👤 ${esc(t.by||t.byE)}</span>`:''}${salaryShifted(t)?`<button class="inst-tag" data-shift="0" title="להחזיר לחודש שבו התקבלה">↪ נספרת ב${monthName(repMonth(t,'charge'))} ✕</button>`:(effKind(t)==='income' && (t.catId==='salary' || t.shiftNext===false))?`<button class="shift-btn" data-shift="1" title="לספור את ההכנסה בחודש הבא">↪ לשייך ל${monthName(shiftMonth(t.date.slice(0,7),1))}</button>`:''}${linkTagHTML(t)}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
       <td class="td-cat"><button class="cat-btn ${t.catId==='uncat'?'is-uncat':''}" data-cat>${esc(catById(t.catId).name)} ▾</button></td>
       <td class="td-meta"><span>${t.date.split('-').reverse().join('/')}</span>${t.card?`<span>💳 ${esc(cardName(t.card))}</span>`:''}<label class="chk" style="font-weight:400"><input type="checkbox" data-incl2 ${t.excluded?'':'checked'}> בדוחות</label></td>
       <td class="td-nec"><select data-nec aria-label="רמת הכרח" ${effKind(t)==='income'?'disabled':''} style="max-width:110px">
@@ -1122,6 +1129,7 @@ function renderTx(){
     tr.querySelector('[data-card]').onchange=e=>{ updateTx(id,{card:e.target.value||null}); toast('נשמר'); };
     const ns=tr.querySelector('[data-nec]'); if(ns) ns.onchange=e=>{ updateTx(id,{nec:e.target.value||null}); renderTx(); };
     tr.querySelector('[data-cat2]').onclick=()=>pickForTx([t]);
+    tr.querySelector('[data-shift]')?.addEventListener('click',e=>{ const on=e.currentTarget.dataset.shift==='1'; setShift(t,on); render(); toast(on?`ההכנסה תיספר ב${monthName(shiftMonth(t.date.slice(0,7),1))}`:'ההכנסה תיספר בחודש שבו התקבלה'); });
     tr.querySelector('[data-link]')?.addEventListener('click',()=>openLinkPicker(t));
     tr.querySelector('[data-fcard]')?.addEventListener('click',()=>openCardPicker(t));
     tr.querySelector('[data-incl]').onchange=e=>setIncluded([t], e.target.checked);
@@ -1221,7 +1229,7 @@ function setDlgType(type, keepCat){
   sel.innerHTML=catOptions(type, cur); if(!cats().some(c=>c.id===cur&&c.kind===type)) sel.value = type==='income'?'salary':'uncat';
   document.getElementById('fNec').disabled = type==='income';
 }
-form.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>setDlgType(b.dataset.type));
+form.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>{ setDlgType(b.dataset.type); document.getElementById('fShiftWrap').hidden=b.dataset.type!=='income'; });
 document.getElementById('fInstOn').onchange=e=>{ document.getElementById('fInstWrap').hidden=!e.target.checked; if(e.target.checked) document.getElementById('fInstN').focus(); };
 document.getElementById('fInstTotal').onchange=()=>{ const tot=+document.getElementById('fInstTotal').value, of=+document.getElementById('fInstOf').value, a=document.getElementById('fAmount'); if(tot&&of>=2&&!a.value) a.value=(tot/of).toFixed(2); };
 document.getElementById('fCard').onchange=e=>{ const w=document.getElementById('fCardNewWrap'); w.hidden=e.target.value!=='__new'; if(!w.hidden) document.getElementById('fCardNew').focus(); };
@@ -1237,6 +1245,7 @@ function openTx(t){
   document.getElementById('fNote').value=t?.note||'';
   document.getElementById('fNec').value=t?.nec||'';
   document.getElementById('fIncl').checked=!t?.excluded;
+  document.getElementById('fShift').checked=!!(t && salaryShifted(t)); document.getElementById('fShiftWrap').hidden=(t?.type||'expense')!=='income';
   { const ex=document.getElementById('fExtra'), e=(t&&t.extra)||null, fl=t&&t.fileId&&S.settings.files&&S.settings.files[t.fileId];
     ex.hidden=!(e||fl||t?.branch);
     ex.hidden = ex.hidden && !(t&&t.by);
@@ -1262,6 +1271,7 @@ form.addEventListener('submit',e=>{
     inst={n,of}; if(tot>amount) inst.total=tot;
   }
   const data={date, amount, desc, type:dlgType, card, inst, excluded:!document.getElementById('fIncl').checked, catId:document.getElementById('fCat').value, nec:dlgType==='income'?null:(document.getElementById('fNec').value||null), note:document.getElementById('fNote').value.trim()};
+  { const probe={...(editing||{}), ...data, shiftNext:undefined}; const want=data.type==='income' && document.getElementById('fShift').checked; data.shiftNext = want===autoShift(probe) ? undefined : want; }
   if (editing){ updateTx(editing.id, data); toast('השינויים נשמרו'); }
   else { addTx([{id:uid(), source:'manual', ...data}]); toast('התנועה נשמרה'); }
   if (!S.range || !inRange(date)) goMonth(date.slice(0,7)); render();
