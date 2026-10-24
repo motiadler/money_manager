@@ -171,6 +171,7 @@ td select:hover,td select:focus{border-color:var(--line);background:var(--surfac
 .link-tag{border:0;border-radius:999px;padding:1px 9px;font:inherit;font-size:.78rem;font-weight:500;cursor:default;display:inline-block}
 button.link-tag{cursor:pointer}
 .link-tag.ok{background:var(--inc-soft);color:var(--inc)}
+.link-tag.pend{background:var(--accent-soft);color:var(--accent)}
 .link-tag.warn{background:var(--imp-soft);color:color-mix(in srgb,var(--imp) 75%,var(--ink))}
 #lockScreen{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:24px;background:var(--bg);overflow:auto}
 #lockScreen *{box-sizing:border-box}
@@ -548,7 +549,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.8';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.9';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -720,10 +721,14 @@ function buildIdx(){
     if (best){ linkOf[c.id]=best.key; stmtTo[best.key]=c.id; }
   });
   const byId=new Map(all.map(t=>[t.id,t]));
-  IDX={ver:dataVer, stm, linkOf, stmtTo, byId, charges, hasBank: all.some(t=>t.srcKind==='bank'), byMonth:{charge:{},deal:{}}};
+  const bankDates=all.filter(t=>t.srcKind==='bank').map(t=>t.date).sort();
+  IDX={ver:dataVer, stm, linkOf, stmtTo, byId, charges, hasBank: bankDates.length>0, bankMax: bankDates[bankDates.length-1]||'', today: todayISO(), byMonth:{charge:{},deal:{}}};
   all.forEach(t=>{ ['charge','deal'].forEach(b=>{ const m=repMonth(t,b); (IDX.byMonth[b][m] ||= []).push(t); }); });
 }
 function idx(){ if(!IDX || IDX.ver!==dataVer) buildIdx(); return IDX; }
+// a card charge that is still ahead (later than today or than the last bank row loaded) can't be in the bank yet
+function stmtChargeDate(t){ return t.chargeDate || t.date; }
+function chargePending(dateOrMonth){ const I=IDX&&IDX.ver===dataVer?IDX:idx(); const d=dateOrMonth.length===7 ? dateOrMonth+'-28' : dateOrMonth; return d > I.today || (I.bankMax && d > I.bankMax); }
 function linkedChargeOf(t){ if(!isCreditRow(t)) return null; const I=IDX&&IDX.ver===dataVer?IDX:idx(); const bid=I.stmtTo[stmtKeyOf(t)]; return bid ? I.byId.get(bid) : null; }
 function chargeLinked(t){ return !!idx().linkOf[t.id]; }
 // a salary that arrives at the end of the month belongs to the next month; the user can also set it per transaction
@@ -924,7 +929,7 @@ function prevPeriodTx(){
 function unlinkedInfo(list){
   const I=idx(), charges=list.filter(t=>isCardChargeRow(t) && !t.excluded && !I.linkOf[t.id]);
   const months=new Set(S.range? periodMonths() : [S.month]);
-  const stms=Object.values(I.stm).filter(s=>!I.stmtTo[s.key] && (s.key.endsWith('|*') ? months.has(shiftMonth(s.month,1)) : months.has(s.month)));
+  const stms=Object.values(I.stm).filter(s=>{ const cm=s.key.endsWith('|*') ? shiftMonth(s.month,1) : s.month; return !I.stmtTo[s.key] && months.has(cm) && !chargePending(cm); });
   return {charges, stms};
 }
 function linkPanelHTML(list){
@@ -1073,7 +1078,7 @@ function trendSVG(){
 /* ---------- transactions ---------- */
 function renderTx(){
   const f=S.filters, q=norm(f.q), basis=S.basis||'charge', I=idx();
-  const isUnlinked=t=> (isCardChargeRow(t) && !t.excluded && !I.linkOf[t.id]) || (I.hasBank && isCreditRow(t) && !t.excluded && !linkedChargeOf(t));
+  const isUnlinked=t=> (isCardChargeRow(t) && !t.excluded && !I.linkOf[t.id]) || (I.hasBank && isCreditRow(t) && !t.excluded && !linkedChargeOf(t) && !chargePending(stmtChargeDate(t)));
   let list = periodTx(basis).filter(t=>
     (!q || norm(t.desc).includes(q) || norm(t.note).includes(q)) &&
     (!f.type || (f.type==='inst' ? !!t.inst : f.type==='excluded' ? !!t.excluded : f.type==='included' ? !t.excluded : f.type==='unlinked' ? isUnlinked(t) : f.type==='cardcharge' ? isCardChargeRow(t) : f.type==='nocard' ? (isCardChargeRow(t) && !chargeCardDigits(t)) : f.type==='refund' ? isRefund(t) : f.type==='others' ? (!!t.byE && t.byE!==me().email && (t.u||0)>Date.now()-14*864e5) : effKind(t)===f.type)) &&
@@ -1102,7 +1107,7 @@ function renderTx(){
       <td class="td-date" style="white-space:nowrap">${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?`<div class="muted" style="font-size:.76rem">${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}</div>`:''; })()}</td>
       <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${(t.byE && t.byE!==me().email)?`<span class="by-tag" title="${esc(t.byE)}">👤 ${esc(t.by||t.byE)}</span>`:''}${salaryShifted(t)?`<button class="inst-tag" data-shift="0" title="להחזיר לחודש שבו התקבלה">↪ נספרת ב${monthName(repMonth(t,'charge'))} ✕</button>`:(effKind(t)==='income' && (t.catId==='salary' || t.shiftNext===false))?`<button class="shift-btn" data-shift="1" title="לספור את ההכנסה בחודש הבא">↪ לשייך ל${monthName(shiftMonth(t.date.slice(0,7),1))}</button>`:''}${linkTagHTML(t)}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
       <td class="td-cat"><button class="cat-btn ${t.catId==='uncat'?'is-uncat':''}" data-cat>${esc(catById(t.catId).name)} ▾</button></td>
-      <td class="td-meta"><span>${t.date.split('-').reverse().join('/')}</span>${t.card?`<span>💳 ${esc(cardName(t.card))}</span>`:''}<label class="chk" style="font-weight:400"><input type="checkbox" data-incl2 ${t.excluded?'':'checked'}> בדוחות</label></td>
+      <td class="td-meta"><span>${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?` · ${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}`:''; })()}</span>${t.card?`<span>💳 ${esc(cardName(t.card))}</span>`:''}<label class="chk" style="font-weight:400"><input type="checkbox" data-incl2 ${t.excluded?'':'checked'}> בדוחות</label></td>
       <td class="td-nec"><select data-nec aria-label="רמת הכרח" ${effKind(t)==='income'?'disabled':''} style="max-width:110px">
         ${effKind(t)==='income'?'<option>הכנסה</option>':isRefund(t)?'<option>זיכוי</option>':`<option value="">${NEC[catById(t.catId).nec].label}</option>`+Object.entries(NEC).map(([k,n])=>`<option value="${k}" ${t.nec===k?'selected':''}>${n.label}</option>`).join('')}
       </select></td>
@@ -1154,7 +1159,10 @@ function linkTagHTML(t){
   }
   if (isCreditRow(t) && I.hasBank){
     const lc=linkedChargeOf(t);
-    return lc ? `<div style="font-size:.8rem;margin-top:2px"><span class="link-tag ok">🔗 חויב בבנק ${fmtD(lc.date)}</span></div>` : `<div style="font-size:.8rem;margin-top:2px"><span class="link-tag warn">⚠️ לא מקושר לחיוב בבנק</span></div>`;
+    if (lc) return `<div style="font-size:.8rem;margin-top:2px"><span class="link-tag ok">🔗 חויב בבנק ${fmtD(lc.date)}</span></div>`;
+    const cd=stmtChargeDate(t);
+    if (chargePending(cd)) return `<div style="font-size:.8rem;margin-top:2px"><span class="link-tag pend" title="החיוב עוד לא מופיע בקובץ הבנק שנקלט">⏳ יחויב בבנק ${t.chargeDate?'ב-'+fmtD(t.chargeDate):'בחיוב הקרוב'}</span></div>`;
+    return `<div style="font-size:.8rem;margin-top:2px"><span class="link-tag warn">⚠️ לא מקושר לחיוב בבנק</span></div>`;
   }
   return '';
 }
