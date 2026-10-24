@@ -554,7 +554,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.11';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.12';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -705,6 +705,8 @@ const isCreditRow = t => t.srcKind==='credit' || (!t.srcKind && !!t.fileId && ((
 const isCardChargeRow = t => t.type==='expense' && (!!t.cardCharge || (t.srcKind==='bank' && CARD_CO_RE.test(t.desc)));
 // one card statement = all rows of the same card charged in the same month, even if they came from several files
 let FILE_MONTH={};
+const dayDiff=(a,b)=>Math.abs(Date.parse(a)-Date.parse(b))/864e5;
+function rowChargeDate(t){ if (t.chargeDate) return t.chargeDate; const f=(S.settings.files||{})[t.fileId]; if (f && f.map && (f.map.chargeCol??-1)>-1) return t.date; return (f && f.chargeDate) || null; }
 function stmtKeyOf(t){
   const f=(S.settings.files||{})[t.fileId]; const hasC = !!t.chargeDate || (f && ((f.map && (f.map.chargeCol??-1)>-1) || f.chargeDate));
   const m = t.chargeDate ? t.chargeDate.slice(0,7) : hasC ? t.date.slice(0,7) : (FILE_MONTH[t.fileId]||t.date.slice(0,7));
@@ -719,21 +721,27 @@ function buildIdx(){
   FILE_MONTH={}; all.forEach(t=>{ if(isCreditRow(t) && !t.chargeDate){ const m=t.date.slice(0,7); if(!FILE_MONTH[t.fileId] || m>FILE_MONTH[t.fileId]) FILE_MONTH[t.fileId]=m; } });
   all.forEach(t=>{ if(!isCreditRow(t) || t.excluded) return; const k=stmtKeyOf(t);
     const s=(stm[k] ||= {key:k, fileId:t.fileId, files:new Set(), card:t.card, sum:0, n:0});
-    s.sum += t.type==='expense'?t.amount:-t.amount; s.n++; if(t.fileId) s.files.add(t.fileId); });
-  Object.values(stm).forEach(s=>{ const parts=s.key.split('|'); s.month=parts[1]; s.guess=parts[2]==='g'; s.digits=digitsOf(s.card?cardName(s.card):''); s.sum=Math.round(s.sum*100)/100; });
+    s.sum += t.type==='expense'?t.amount:-t.amount; s.n++; if(t.fileId) s.files.add(t.fileId);
+    const cd=rowChargeDate(t); if(cd){ (s.cds ||= {})[cd]=((s.cds||{})[cd]||0)+1; } });
+  Object.values(stm).forEach(s=>{ const parts=s.key.split('|'); s.month=parts[1]; s.guess=parts[2]==='g'; s.digits=digitsOf(s.card?cardName(s.card):''); s.sum=Math.round(s.sum*100)/100;
+    s.cdate = s.cds ? Object.entries(s.cds).sort((a,b)=>b[1]-a[1])[0][0] : null; });
   const charges=all.filter(isCardChargeRow).sort((a,b)=>a.date.localeCompare(b.date));
   const linkOf={}, stmtTo={};
-  charges.forEach(c=>{ if(c.link && c.link!=='none' && stm[c.link] && !stmtTo[c.link]){ linkOf[c.id]=c.link; stmtTo[c.link]=c.id; } });
+  // a manual link is kept only if its statement is charged around the same date (protects against an earlier wrong choice)
+  charges.forEach(c=>{ const s=c.link && c.link!=='none' && stm[c.link]; if(s && !stmtTo[c.link] && (s.cdate ? dayDiff(c.date,s.cdate)<=20 : Math.abs(mDiff(c.date.slice(0,7),s.month))<=1)){ linkOf[c.id]=c.link; stmtTo[c.link]=c.id; } });
   charges.forEach(c=>{
     if (c.link || linkOf[c.id]) return;
     const cm=c.date.slice(0,7), cd=chargeCardDigits(c); let best=null, bd=Infinity;
     Object.values(stm).forEach(s=>{
       if (stmtTo[s.key]) return;
-      const md=mDiff(cm,s.month); if (s.guess ? (md<0 || md>1) : Math.abs(md)>1) return;
+      // the bank charge must fall on the statement's charge date (a few days' leeway for posting), or in its month
+      let md=0;
+      if (s.cdate){ if (dayDiff(c.date, s.cdate) > 6) return; }
+      else { md=mDiff(cm,s.month); if (s.guess ? (md<0 || md>1) : md!==0) return; }
       const sd=s.digits; if(cd && sd && cd!==sd) return;                 // different card: never link
       const d=Math.abs(s.sum-c.amount), tol=Math.max(2,Math.abs(s.sum)*0.01), sameCard=!!(cd && sd);
       if (!sameCard && d>tol) return;                                      // without a card match the amount must match
-      // same card and same month links even when the totals differ a little (fees, foreign currency, a missing row)
+      if (sameCard && d > (s.cdate ? Math.max(100,Math.abs(s.sum)*0.15) : Math.max(50,Math.abs(s.sum)*0.05))) return;   // too far apart: probably another month's statement
       let score=d + Math.abs(s.guess?md-1:md)*1e5; if(sameCard) score-=1e9; if(d<=tol) score-=1e6; if(score<bd){ bd=score; best=s; } });
     if (best){ linkOf[c.id]=best.key; stmtTo[best.key]=c.id; }
   });
@@ -1217,14 +1225,14 @@ function openCardPicker(t){
 }
 function openLinkPicker(t){
   const I=idx(), cur=I.linkOf[t.id]||'';
-  const cand=Object.values(I.stm).filter(s=>(!I.stmtTo[s.key] || s.key===cur) && Math.abs(mDiff(t.date.slice(0,7),s.month))<=2)
+  const cand=Object.values(I.stm).filter(s=>(!I.stmtTo[s.key] || s.key===cur) && (s.cdate ? dayDiff(t.date,s.cdate)<=45 : Math.abs(mDiff(t.date.slice(0,7),s.month))<=1))
     .sort((a,b)=>Math.abs(a.sum-t.amount)-Math.abs(b.sum-t.amount));
   let d=document.getElementById('linkDlg');
   if (!d){ d=document.createElement('dialog'); d.id='linkDlg'; document.body.appendChild(d); }
   d.innerHTML=`<form method="dialog"><h2>קישור חיוב לקובץ פירוט</h2>
     <p class="muted" style="margin-top:0">${esc(t.desc)} · ${fmtD(t.date)} · <strong>${fmt2(t.amount)}</strong></p>
     <div style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto">
-      ${cand.map(s=>{ const f=(S.settings.files||{})[s.fileId]; const diff=r2(s.sum-t.amount); return `<label class="chk" style="font-weight:400;padding:10px 12px;border-radius:12px;background:var(--sunk)"><input type="radio" name="lk" value="${esc(s.key)}" ${s.key===cur?'checked':''}> <span><strong>${esc(f?f.name:'קובץ')}</strong>${s.card?' · '+esc(cardName(s.card)):''} · ${monthLabel(s.month)}<br><span class="muted" style="font-size:.86rem">${s.n} עסקאות · ${fmt2(s.sum)}${Math.abs(diff)>=1?` · הפרש ${fmt2(diff)}`:' · תואם'}</span></span></label>`; }).join('') || '<p class="muted">לא נמצאו קובצי פירוט בחודשים הסמוכים. קלטו את קובץ הפירוט של הכרטיס, והמערכת תקשר אותו אוטומטית.</p>'}
+      ${cand.map(s=>{ const f=(S.settings.files||{})[s.fileId]; const diff=r2(s.sum-t.amount); return `<label class="chk" style="font-weight:400;padding:10px 12px;border-radius:12px;background:var(--sunk)"><input type="radio" name="lk" value="${esc(s.key)}" ${s.key===cur?'checked':''}> <span><strong>${esc(f?f.name:'קובץ')}</strong>${s.card?' · '+esc(cardName(s.card)):''} · ${s.cdate?'חיוב ב-'+fmtD(s.cdate):monthLabel(s.month)}${s.cdate&&dayDiff(t.date,s.cdate)>6?' <span style="color:var(--exp)">(תאריך חיוב אחר)</span>':''}<br><span class="muted" style="font-size:.86rem">${s.n} עסקאות · ${fmt2(s.sum)}${Math.abs(diff)>=1?` · הפרש ${fmt2(diff)}`:' · תואם'}</span></span></label>`; }).join('') || '<p class="muted">לא נמצאו קובצי פירוט בחודשים הסמוכים. קלטו את קובץ הפירוט של הכרטיס, והמערכת תקשר אותו אוטומטית.</p>'}
       <label class="chk" style="font-weight:400;padding:10px 12px;border-radius:12px;background:var(--sunk)"><input type="radio" name="lk" value="none" ${t.link==='none'?'checked':''}> <span>ללא קישור: לספור את החיוב מהבנק כהוצאה אחת</span></label>
       <label class="chk" style="font-weight:400;padding:10px 12px"><input type="radio" name="lk" value="" ${!t.link?'checked':''}> <span>קישור אוטומטי לפי סכום וחודש</span></label>
     </div>
