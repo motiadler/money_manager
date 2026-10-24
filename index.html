@@ -554,7 +554,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.12';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.13';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -1130,7 +1130,7 @@ function renderTx(){
     <thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th>הכרח</th><th>כרטיס</th><th style="text-align:center">בדוחות</th><th style="text-align:left">סכום</th><th><span class="sr" style="position:absolute;left:-9999px">פעולות</span></th></tr></thead>
     <tbody>${list.map(t=>`<tr data-id="${t.id}" class="${t.catId==='uncat'?'uncat':''} ${t.excluded?'is-excl':''}">
       <td class="td-date" style="white-space:nowrap">${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?`<div class="muted" style="font-size:.76rem">${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}</div>`:''; })()}</td>
-      <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${(t.byE && t.byE!==me().email)?`<span class="by-tag" title="${esc(t.byE)}">👤 ${esc(t.by||t.byE)}</span>`:''}${salaryShifted(t)?`<button class="inst-tag" data-shift="0" title="להחזיר לחודש שבו התקבלה">↪ נספרת ב${monthName(repMonth(t,'charge'))} ✕</button>`:(effKind(t)==='income' && (t.catId==='salary' || t.shiftNext===false))?`<button class="shift-btn" data-shift="1" title="לספור את ההכנסה בחודש הבא">↪ לשייך ל${monthName(shiftMonth(t.date.slice(0,7),1))}</button>`:''}${linkTagHTML(t)}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
+      <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.fx&&!t.fx.pending?`<span class="inst-tag" title="${t.fx.src==='boi'?'שער יציג':t.fx.src==='ecb'?'שער ECB':'שער ידני'} ${fmtD(t.fx.day||'')}">💱 ${fmtCur(t.fx.orig,t.fx.cur)} × ${(+t.fx.rate).toFixed(3)}</span>`:''}${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${(t.byE && t.byE!==me().email)?`<span class="by-tag" title="${esc(t.byE)}">👤 ${esc(t.by||t.byE)}</span>`:''}${salaryShifted(t)?`<button class="inst-tag" data-shift="0" title="להחזיר לחודש שבו התקבלה">↪ נספרת ב${monthName(repMonth(t,'charge'))} ✕</button>`:(effKind(t)==='income' && (t.catId==='salary' || t.shiftNext===false))?`<button class="shift-btn" data-shift="1" title="לספור את ההכנסה בחודש הבא">↪ לשייך ל${monthName(shiftMonth(t.date.slice(0,7),1))}</button>`:''}${linkTagHTML(t)}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
       <td class="td-cat"><button class="cat-btn ${t.catId==='uncat'?'is-uncat':''}" data-cat>${esc(catById(t.catId).name)} ▾</button></td>
       <td class="td-meta"><span>${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?` · ${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}`:''; })()}</span>${t.card?`<span>${t.srcKind==='bank'?'🏦':'💳'} ${esc(cardName(t.card))}</span>`:''}<label class="chk" style="font-weight:400"><input type="checkbox" data-incl2 ${t.excluded?'':'checked'}> בדוחות</label></td>
       <td class="td-nec"><select data-nec aria-label="רמת הכרח" ${effKind(t)==='income'?'disabled':''} style="max-width:110px">
@@ -1404,7 +1404,10 @@ function guessMap(rows, forcedHi){
   const instCol=h.findIndex(c=>/פירוט נוסף|הערות|תשלום|installment/i.test(c) && !/תאריך|מועד|סכום|תשלומים/.test(c));
   const instOfCol=h.findIndex((c,i)=>i!==instCol && /תשלומים|מתוך/.test(c) && !/סוג|סכום/.test(c));
   const dealCol=h.findIndex((c,i)=>i!==amt && /סכום עסקה|סכום העסקה|סכום מקורי|סכום קני/.test(c));
-  return {hi, headers:h, date, desc, amt, debit, credit, mode, cardCol, instCol, instOfCol, dealCol, amtIsTotal, kind:null, branchCol, chargeCol: chargeCol===date?-1:chargeCol};
+  // the currency of the amount column: "מטבע חיוב" goes with the charged amount; "מטבע עסקה" only when the amount is the deal amount
+  let curCol=h.findIndex(c=>/מטבע\s*ה?חיוב|currency.*charge/i.test(c));
+  if (curCol<0){ const any=h.findIndex(c=>/^מטבע|מטבע\s*(ה?עסקה|מקור)?$|currency/i.test(c)); if(any>-1 && !/חיוב/.test(h[amt]||'')) curCol=any; }
+  return {hi, headers:h, date, desc, amt, debit, credit, mode, cardCol, instCol, instOfCol, dealCol, amtIsTotal, kind:null, branchCol, chargeCol: chargeCol===date?-1:chargeCol, curCol};
 }
 function parseDate(v){
   if (v instanceof Date && !isNaN(v)) return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
@@ -1447,7 +1450,28 @@ function rowInst(r, m, desc, amount){
 }
 const nearAmt=(a,b)=>Math.abs(a-b)<=Math.max(1,Math.abs(b)*0.02);
 const r2=x=>Math.round(x*100)/100;
-const MAP_KEYS=['date','desc','amt','debit','credit','cardCol','instCol','instOfCol','dealCol','branchCol','chargeCol'];
+const MAP_KEYS=['date','desc','amt','debit','credit','cardCol','instCol','instOfCol','dealCol','branchCol','chargeCol','curCol'];
+/* ---- foreign currency: convert to shekels by the Bank of Israel representative rate of the charge day ---- */
+const CUR_MAP=[[/^(\$|usd|us\$|דולר|דולר ארה"ב|דולר אמריקאי)$/i,'USD'],[/^(€|eur|euro|יורו|אירו)$/i,'EUR'],[/^(£|gbp|ליש"ט|ליש״ט|לירה שטרלינג|פאונד|שטרלינג)$/i,'GBP'],[/^(chf|פרנק|פרנק שוויצרי)$/i,'CHF'],[/^(jpy|¥|ין|ין יפני)$/i,'JPY'],[/^(cad|דולר קנדי)$/i,'CAD'],[/^(aud|דולר אוסטרלי)$/i,'AUD'],[/^(₪|ש"ח|ש״ח|שח|ils|nis|שקל|שקלים|ש\.ח)$/i,'ILS']];
+function curCode(v){ const s=String(v??'').trim().replace(/\s+/g,' '); if(!s) return null; for(const [re,c] of CUR_MAP) if(re.test(s)) return c; if(/^[A-Z]{3}$/i.test(s)) return s.toUpperCase(); return null; }
+const CUR_SIGN={USD:'$',EUR:'€',GBP:'£',JPY:'¥',ILS:'₪'};
+const fmtCur=(n,c)=>(CUR_SIGN[c]||c+' ')+(+n).toLocaleString('he-IL',{maximumFractionDigits:2});
+async function fetchRate(cur, date){
+  const key=cur+'|'+date, C=(S.settings.fxCache ||= {}); if (C[key]) return C[key];
+  const from=new Date(Date.parse(date)-12*864e5).toISOString().slice(0,10);
+  try{   // Bank of Israel: official representative rates (last business day up to the charge date)
+    const r=await fetch(`https://edge.boi.gov.il/FusionEdgeServer/sdmx/v2/data/dataflow/BOI.STATISTICS/EXR/1.0/RER_${cur}_ILS?startperiod=${from}&endperiod=${date}&format=csv`);
+    if (r.ok){ const lines=(await r.text()).trim().split(/\r?\n/).map(l=>l.split(',').map(x=>x.replace(/^"|"$/g,'')));
+      const head=lines.shift()||[], ti=head.indexOf('TIME_PERIOD'), vi=head.indexOf('OBS_VALUE');
+      const last=lines.filter(a=>a[ti] && a[vi] && a[ti]<=date).sort((a,b)=>a[ti].localeCompare(b[ti])).pop();
+      if (last){ let v=+last[vi]; if (cur==='JPY' && v>5) v=v/100; if (v>0){ C[key]={rate:v, src:'boi', day:last[ti]}; return C[key]; } } }
+  }catch(e){}
+  try{   // fallback: European Central Bank reference rate (very close to the representative rate)
+    const r=await fetch(`https://api.frankfurter.app/${date}?from=${cur}&to=ILS`);
+    if (r.ok){ const j=await r.json(); if (j.rates && j.rates.ILS){ C[key]={rate:j.rates.ILS, src:'ecb', day:j.date}; return C[key]; } }
+  }catch(e){}
+  return null;
+}
 function isHeaderRow(row){
   const cells=row.map(c=>String(c??'').trim()).filter(Boolean);
   if (cells.length<2 || cells.some(c=>parseDate(c) || (typeof c==='number'))) return false;
@@ -1464,7 +1488,7 @@ function buildImport(){
   if (m.kind==='bank' && !I.cardManual && /^כרטיס \d{4}$/.test(I.cardName||'')) I.cardName='חשבון בנק';
   const existing=new Map(allTx().filter(t=>!I.replaceFileId || t.fileId!==I.replaceFileId).map(t=>[t.date+'|'+norm(t.desc)+'|'+t.amount.toFixed(2)+'|'+t.type+'|'+norm(cardName(t.card)), t]));
   let skipped=0, dup=0, cardSkip=0;
-  const st={sections:1, sheets:I.rows.sheets||1, dates:[], instRows:0, instDerived:0, cards:new Set(), branches:new Set(), extraCols:new Set(), foreign:0, sectionNames:[]};
+  const st={sections:1, sheets:I.rows.sheets||1, dates:[], instRows:0, instDerived:0, cards:new Set(), branches:new Set(), extraCols:new Set(), foreign:0, sectionNames:[], fxRows:0, fxMissing:new Set(), fxUsed:{}};
   const seen=new Map();
   let maxMonth=''; for (let i=m.hi+1;i<I.rows.length;i++){ const d=parseDate(I.rows[i][m.date]); if(d && d.slice(0,7)>maxMonth) maxMonth=d.slice(0,7); }
   st.instMoved=0;
@@ -1491,6 +1515,11 @@ function buildImport(){
       if (a){ const positiveIsExpense = m.mode==='posExpense'; type = (a>0)===positiveIsExpense ? 'expense':'income'; amount=Math.abs(a); }
     }
     if (!date || !desc || !amount){ const lab=r.map(c=>String(c??'').trim()).filter(Boolean); if(lab.length===1 && lab[0].length<40) lastLabel=lab[0]; skipped++; continue; }
+    let fx=null;
+    if ((cm.curCol??-1)>-1 && m.convertFx!==false){ const cur=curCode(r[cm.curCol]); if (cur && cur!=='ILS'){
+      const fxDate=chargeDate||date, k=cur+'|'+fxDate, rr=(S.settings.fxCache||{})[k];
+      if (rr){ fx={cur, orig:amount, rate:rr.rate, day:rr.day, src:rr.src}; amount=r2(amount*rr.rate); st.fxRows++; }
+      else { st.fxMissing.add(k); fx={cur, orig:amount, pending:true}; st.fxRows++; } } }
     const isCardCharge = m.kind==='bank' && m.skipCardCharges && type==='expense' && CARD_CO_RE.test(desc);
     const mm={...m, ...cm};
     const cn=nameCard || importCardName(r, cm.cardCol);
@@ -1521,7 +1550,7 @@ function buildImport(){
     const used=new Set(MAP_KEYS.map(k=>cm[k]).filter(x=>x>-1)); let extra=null;
     heads.forEach((hd,ci)=>{ if(!hd || used.has(ci)) return; let v=r[ci]; if(v===''||v==null) return; if(v instanceof Date) v=parseDate(v); v=String(v).trim(); if(!v) return; (extra ||= {})[hd]=v.slice(0,80); st.extraCols.add(hd); if(/מטבע|currency/i.test(hd) && !/₪|ש"ח|ש״ח|ils|nis|שקל/i.test(v)) st.foreign++; });
     st.dates.push(date); if(cn) st.cards.add(cn); if(branch) st.branches.add(branch);
-    out.push({id:uid(), date, desc, amount, type, catId: (isCardCharge && catId==='uncat') ? 'cardpay' : catId, excluded, cardCharge:isCardCharge||undefined, srcKind:m.kind||null, branch:branch||undefined, extra:extra||undefined, purchaseDate:purchaseDate||undefined, chargeDate:(chargeDate&&chargeDate!==date)?chargeDate:undefined, nec:null, note:'', source:'file', cardName:cn, inst, _row:i});
+    out.push({id:uid(), date, desc, amount, type, catId: (isCardCharge && catId==='uncat') ? 'cardpay' : catId, excluded, cardCharge:isCardCharge||undefined, srcKind:m.kind||null, branch:branch||undefined, extra:extra||undefined, fx:fx||undefined, purchaseDate:purchaseDate||undefined, chargeDate:(chargeDate&&chargeDate!==date)?chargeDate:undefined, nec:null, note:'', source:'file', cardName:cn, inst, _row:i});
   }
   st.dates.sort();
   return {out, skipped, dup, fills, cardSkip, st};
@@ -1536,7 +1565,8 @@ function analysisHTML(st, out){
   if (st.cards.size) items.push(`כרטיסים: ${[...st.cards].map(esc).join(', ')}`);
   if (st.instRows) items.push(`${st.instRows} חיובים בתשלומים${st.instDerived?` (ב-${st.instDerived} הסכום בקובץ הוא סכום העסקה, והתשלום החודשי חושב ממנו)`:''}${st.instMoved?`. ${st.instMoved} מהם שויכו לתאריך החיוב במקום לתאריך הרכישה`:''}`);
   if (st.branches.size) items.push(`${st.branches.size} ענפים`);
-  if (st.foreign) items.push(`${st.foreign} עסקאות במטבע חוץ`);
+  if (st.fxRows) items.push(`${st.fxRows} עסקאות במטבע חוץ${st.fxMissing.size?' (ממתינות לשער המרה)':', הומרו לשקלים לפי השער היציג של יום החיוב'}`);
+  else if (st.foreign) items.push(`${st.foreign} עסקאות במטבע חוץ`);
   if (st.extraCols.size) items.push(`נתונים נוספים שנשמרים לכל תנועה: ${[...st.extraCols].map(esc).join(', ')}`);
   return `<div style="margin:12px 0;padding:12px 14px;border-radius:12px;background:var(--accent-soft)"><strong style="display:block;margin-bottom:4px">🔍 ניתוח הקובץ</strong><ul style="margin:0;padding-inline-start:18px;font-size:.9rem;line-height:1.7">${items.map(x=>`<li>${x}</li>`).join('')}</ul></div>`;
 }
@@ -1643,6 +1673,8 @@ function renderImport(){
     return;
   }
   const {out,skipped,dup,fills,cardSkip,st}=buildImport(); const m=I.map; const sugg=m.kind?null:suggestKind(m.headers, I.name);
+  if (st.fxMissing.size && !I.fxLoading && !I.fxTried){ I.fxLoading=true; Promise.all([...st.fxMissing].map(k=>{ const [c,d]=k.split('|'); return fetchRate(c,d); })).then(()=>{ I.fxLoading=false; I.fxTried=true; Store.saveSettings(); if(S.imp===I) renderImport(); }); }
+  const fxPairs={}; out.forEach(t=>{ if(t.fx){ const k=t.fx.cur+'|'+(t.chargeDate||t.date); (fxPairs[k] ||= {n:0, orig:0}); fxPairs[k].n++; fxPairs[k].orig+=t.fx.orig; } });
   const colOpts = sel => `<option value="-1">—</option>`+m.headers.map((h,i)=>`<option value="${i}" ${i===sel?'selected':''}>${esc(h||('עמודה '+(i+1)))}</option>`).join('');
   const inc=out.filter(t=>t.type==='income'&&!t.excluded).reduce((a,t)=>a+t.amount,0), exp=out.filter(t=>t.type==='expense'&&!t.excluded).reduce((a,t)=>a+t.amount,0);
   const uncat=out.filter(t=>t.catId==='uncat').length;
@@ -1683,6 +1715,7 @@ function renderImport(){
         :`<div class="field"><label>עמודת סכום</label><select id="mAmt">${colOpts(m.amt)}</select></div>`}
       <div class="field"><label>עמודת מספר כרטיס (אם יש)</label><select id="mCardCol">${colOpts(m.cardCol)}</select></div>
       ${m.kind!=='bank' && (m.dealCol??-1)<0?`<div class="field" style="justify-content:flex-end"><label class="chk" style="color:var(--ink)"><input type="checkbox" id="mAmtTotal" ${m.amtIsTotal?'checked':''}> בעסקאות בתשלומים, עמודת הסכום היא סכום העסקה הכולל (לחלק במספר התשלומים)</label></div>`:''}
+      <div class="field"><label>עמודת מטבע של הסכום (אם יש)</label><select id="mCur">${colOpts(m.curCol??-1)}</select></div>
       <div class="field"><label>עמודת תאריך חיוב (אם יש)</label><select id="mCharge">${colOpts(m.chargeCol??-1)}</select></div>
       ${m.kind==="credit" && (m.chargeCol??-1)<0 ? `<div class="field"><label for="mFileCharge">תאריך החיוב של הקובץ${I.nameInfo&&I.nameInfo.chargeMonth?" (זוהה משם הקובץ)":""}</label><input type="date" id="mFileCharge" value="${esc(I.fileCharge||"")}"></div>` : ""}
       <div class="field"><label>עמודת ענף / קטגוריה (אם יש)</label><select id="mBranch">${colOpts(m.branchCol??-1)}</select></div>
@@ -1695,9 +1728,16 @@ function renderImport(){
     ${analysisHTML(st, out)}
     <p style="margin:6px 0 14px"><strong>${out.length}</strong> תנועות מוכנות לקליטה: ${fmt(exp)} הוצאות, ${fmt(inc)} הכנסות.${out.some(t=>t.inst)?` ${out.filter(t=>t.inst).length} מהן חיובים בתשלומים.`:''}
       <span class="muted">${dup?` ${dup} כבר קיימות ויידלגו.`:''}${skipped?` ${skipped} שורות ללא תאריך/סכום יידלגו.`:''}${cardSkip?` ${cardSkip} חיובי כרטיס אשראי יקושרו לקובצי הפירוט.`:''}${uncat?` ${uncat} לא זוהו ויסומנו כלא מסווגות.`:''}</span></p>
+    ${Object.keys(fxPairs).length?`<div style="margin:0 0 14px;padding:10px 14px;border-radius:12px;background:var(--sunk)">
+      <strong>💱 מטבע חוץ</strong>
+      <label class="chk" style="font-weight:400;margin:6px 0"><input type="checkbox" id="mFx" ${m.convertFx!==false?'checked':''}> להמיר לשקלים לפי השער היציג של בנק ישראל ביום החיוב (או יום העסקים הקודם)</label>
+      ${I.fxLoading?'<p class="muted" style="margin:4px 0">טוען שערים מבנק ישראל…</p>':''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px">${Object.entries(fxPairs).map(([k,v])=>{ const [c,d]=k.split('|'), rr=(S.settings.fxCache||{})[k]; return `<label style="display:flex;flex-direction:column;gap:3px;font-size:.88rem"><span>${c} · חיוב ${fmtD(d)} · ${v.n} עסקאות (${fmtCur(v.orig,c)})</span>
+        <span style="display:flex;gap:6px;align-items:center"><input type="number" step="0.0001" min="0" data-fx="${k}" value="${rr?rr.rate:''}" placeholder="שער" style="width:110px;border:1px solid var(--line);border-radius:10px;padding:5px 8px;background:var(--surface)${rr?'':';border-color:var(--exp)'}"><span class="muted" style="font-size:.8rem">${rr?(rr.src==='boi'?'שער יציג '+fmtD(rr.day):rr.src==='ecb'?'שער ECB '+fmtD(rr.day):'הוזן ידנית'):'לא נמצא שער. הקלידו אותו'}</span></span></label>`; }).join('')}</div>
+    </div>`:''}
     ${branchPanelHTML(out)}
     ${(m.kind==='credit' && (I.cardName||st.cards.size))?`<label class="chk" style="font-weight:400;margin:0 0 12px"><input type="checkbox" id="mShare" ${I.shareProfile!==false?'checked':''}> להציע את ההגדרות האלה גם לקבצים הבאים של ${esc([...st.cards][0]||I.cardName)}</label>`:''}
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="impGo" ${m.kind&&(out.length||fills.length)?'':'disabled'}>${!m.kind?'בחרו סוג קובץ':out.length?`קליטת ${out.length} תנועות`:`עדכון פרטי תשלומים ב-${fills.length} תנועות`}</button>${I.item?'<button class="btn" id="impSkip">דילוג על הקובץ</button>':''}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="impGo" ${m.kind&&(out.length||fills.length)&&!st.fxMissing.size?'':'disabled'}>${!m.kind?'בחרו סוג קובץ':st.fxMissing.size?(I.fxLoading?'טוען שערי המרה…':'חסרים שערי המרה'):out.length?`קליטת ${out.length} תנועות`:`עדכון פרטי תשלומים ב-${fills.length} תנועות`}</button>${I.item?'<button class="btn" id="impSkip">דילוג על הקובץ</button>':''}</div>
   </div>
   ${out.length?`<h3 style="margin-top:22px">תצוגה מקדימה</h3><div class="table-wrap"><table><thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th>כרטיס</th>${[...st.extraCols].map(c=>`<th>${esc(c)}</th>`).join('')}<th style="text-align:center">בדוחות</th><th style="text-align:left">סכום</th></tr></thead><tbody>
     ${out.slice(0,40).map(t=>`<tr class="${t.excluded?'is-excl':''}"><td>${t.date.split('-').reverse().join('/')}</td><td>${esc(t.desc)}</td><td><button class="cat-btn ${t.catId==='uncat'?'is-uncat':''}" data-prow="${t._row}">${esc(catById(t.catId).name)} ▾</button></td><td class="card-tag">${esc(t.cardName||'—')}${t.inst?` · תשלום ${t.inst.n}/${t.inst.of}${t.inst.total?' מתוך '+fmt(t.inst.total):''}`:''}</td>${[...st.extraCols].map(c=>`<td class="card-tag">${esc((t.extra||{})[c]||'')}</td>`).join('')}<td style="text-align:center"><input type="checkbox" data-pincl="${t._row}" ${t.excluded?'':'checked'} aria-label="לכלול בדוחות"></td><td class="amt ${t.type==='income'?'inc':''}">${t.type==='income'?'+':''}${fmt2(t.amount)}</td></tr>`).join('')}
@@ -1722,6 +1762,9 @@ function renderImport(){
   app.querySelector('#mAmtTotal')?.addEventListener('change',e=>{ m.amtIsTotal=e.target.checked; renderImport(); });
   app.querySelectorAll('[data-branch]').forEach(s=>s.onchange=()=>{ const b=s.dataset.branch; S.settings.branchMap ||= {}; if(s.value) S.settings.branchMap[b]=s.value; else delete S.settings.branchMap[b]; Store.saveSettings(); if(ACTIVE===GD) GD.saveImportSettings(); renderImport(); });
   app.querySelector('#mFileCharge')?.addEventListener('change',e=>{ I.fileCharge=e.target.value||''; renderImport(); });
+  app.querySelector('#mCur').onchange=()=>{ m.curCol=num('#mCur'); I.fxTried=false; renderImport(); };
+  app.querySelector('#mFx')?.addEventListener('change',e=>{ m.convertFx=e.target.checked; renderImport(); });
+  app.querySelectorAll('[data-fx]').forEach(inp=>inp.onchange=()=>{ const v=parseFloat(inp.value); const [c,d]=inp.dataset.fx.split('|'); if(v>0){ (S.settings.fxCache ||= {})[inp.dataset.fx]={rate:v, src:'manual', day:d}; Store.saveSettings(); } renderImport(); });
   app.querySelector('#mCharge').onchange=()=>{ m.chargeCol=num('#mCharge'); renderImport(); };
   app.querySelector('#mBranch').onchange=()=>{ m.branchCol=num('#mBranch'); renderImport(); };
   app.querySelector('#mInst').onchange=()=>{ m.instCol=num('#mInst'); renderImport(); };
@@ -3092,7 +3135,7 @@ async function processQueue(interactive){
     const nm=it.file.displayName||it.file.name, pr=prepareImport(rows, nm), fcard=cardHint(rows, nm);
     S.imp={srcFile:it.file, name:nm, path:it.path, mime:it.file.mime||null, rows, map:pr.map, cardName:pr.cardName||fcard, item:it, replaceFileId:it.replaceFid||null};
     if (pr.fileCharge!==undefined) S.imp.fileCharge=pr.fileCharge;
-    if (pr.auto && S.autoLoad){ const b=buildImport(); saveProfile(b.st.cards); commitImport(b.out,b.fills); markFile(it); continue; }
+    if (pr.auto && S.autoLoad && !buildImport().st.fxMissing.size){ const b=buildImport(); saveProfile(b.st.cards); commitImport(b.out,b.fills); markFile(it); continue; }
     if (interactive || S.tab==='import'){ S.tab='import'; render(); }
     else toast(`בתיקייה יש קובץ חדש בפורמט שעוד לא הוגדר: ${it.file.name}`,[{label:'להגדרה',fn:()=>{ S.tab='import'; render(); }}]);
     return;
