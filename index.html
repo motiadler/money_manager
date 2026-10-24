@@ -554,7 +554,7 @@ dialog{background:var(--surface);border-radius:28px}
 <script>
 (() => {
 /* ================= constants ================= */
-const APP_VERSION='2026.10.24.10';   // bump on every release: the installed app compares it with the file on the server
+const APP_VERSION='2026.10.24.11';   // bump on every release: the installed app compares it with the file on the server
 const NEC = {
   essential:{label:'חובה', cls:'ess', desc:'הוצאות שאי אפשר בלעדיהן: דיור, חשבונות, מזון בסיסי, בריאות'},
   important:{label:'חשוב', cls:'imp', desc:'נחוצות, אבל אפשר לשלם עליהן פחות: תחבורה, תקשורת, ביגוד'},
@@ -703,26 +703,38 @@ let dataVer=0, IDX=null;
 const bump=()=>{ dataVer++; };
 const isCreditRow = t => t.srcKind==='credit' || (!t.srcKind && !!t.fileId && ((S.settings.files||{})[t.fileId]||{}).kind==='credit');
 const isCardChargeRow = t => t.type==='expense' && (!!t.cardCharge || (t.srcKind==='bank' && CARD_CO_RE.test(t.desc)));
-function stmtKeyOf(t){ const f=(S.settings.files||{})[t.fileId]; const hasC=f && ((f.map && (f.map.chargeCol??-1)>-1) || f.chargeDate); return (t.fileId||('card:'+(t.card||''))) + '|' + (hasC ? (t.chargeDate||t.date).slice(0,7) : '*'); }
+// one card statement = all rows of the same card charged in the same month, even if they came from several files
+let FILE_MONTH={};
+function stmtKeyOf(t){
+  const f=(S.settings.files||{})[t.fileId]; const hasC = !!t.chargeDate || (f && ((f.map && (f.map.chargeCol??-1)>-1) || f.chargeDate));
+  const m = t.chargeDate ? t.chargeDate.slice(0,7) : hasC ? t.date.slice(0,7) : (FILE_MONTH[t.fileId]||t.date.slice(0,7));
+  const d = digitsOf(cardName(t.card));
+  return (d ? 'c'+d : (t.fileId||('card:'+(t.card||'')))) + '|' + m + (hasC ? '' : '|g');
+}
 const digitsOf = s => (String(s||'').match(/\d{4}(?!.*\d{4})/)||[])[0] || '';
 // the credit card a bank charge belongs to: set by the user on the row, or 4 digits in the description
 const chargeCardDigits = t => t.forCard ? digitsOf(cardName(t.forCard)) : digitsOf(t.desc);
 function buildIdx(){
   const all=allTx(), stm={};
+  FILE_MONTH={}; all.forEach(t=>{ if(isCreditRow(t) && !t.chargeDate){ const m=t.date.slice(0,7); if(!FILE_MONTH[t.fileId] || m>FILE_MONTH[t.fileId]) FILE_MONTH[t.fileId]=m; } });
   all.forEach(t=>{ if(!isCreditRow(t) || t.excluded) return; const k=stmtKeyOf(t);
-    const s=(stm[k] ||= {key:k, fileId:t.fileId, card:t.card, sum:0, n:0, maxMonth:''});
-    s.sum += t.type==='expense'?t.amount:-t.amount; s.n++; const cm=(t.chargeDate||t.date).slice(0,7); if(cm>s.maxMonth) s.maxMonth=cm; });
-  Object.values(stm).forEach(s=>{ s.month = s.key.endsWith('|*') ? s.maxMonth : s.key.split('|').pop(); s.sum=Math.round(s.sum*100)/100; });
+    const s=(stm[k] ||= {key:k, fileId:t.fileId, files:new Set(), card:t.card, sum:0, n:0});
+    s.sum += t.type==='expense'?t.amount:-t.amount; s.n++; if(t.fileId) s.files.add(t.fileId); });
+  Object.values(stm).forEach(s=>{ const parts=s.key.split('|'); s.month=parts[1]; s.guess=parts[2]==='g'; s.digits=digitsOf(s.card?cardName(s.card):''); s.sum=Math.round(s.sum*100)/100; });
   const charges=all.filter(isCardChargeRow).sort((a,b)=>a.date.localeCompare(b.date));
   const linkOf={}, stmtTo={};
   charges.forEach(c=>{ if(c.link && c.link!=='none' && stm[c.link] && !stmtTo[c.link]){ linkOf[c.id]=c.link; stmtTo[c.link]=c.id; } });
   charges.forEach(c=>{
     if (c.link || linkOf[c.id]) return;
     const cm=c.date.slice(0,7), cd=chargeCardDigits(c); let best=null, bd=Infinity;
-    Object.values(stm).forEach(s=>{ if(stmtTo[s.key] || Math.abs(mDiff(cm,s.month))>1) return;
-      const sd=digitsOf(s.card?cardName(s.card):''); if(cd && sd && cd!==sd) return;   // different card: never link
-      const d=Math.abs(s.sum-c.amount); if(d>Math.max(2,Math.abs(s.sum)*0.01)) return;
-      let score=d; if(cd && sd && cd===sd) score-=1000; if(score<bd){ bd=score; best=s; } });
+    Object.values(stm).forEach(s=>{
+      if (stmtTo[s.key]) return;
+      const md=mDiff(cm,s.month); if (s.guess ? (md<0 || md>1) : Math.abs(md)>1) return;
+      const sd=s.digits; if(cd && sd && cd!==sd) return;                 // different card: never link
+      const d=Math.abs(s.sum-c.amount), tol=Math.max(2,Math.abs(s.sum)*0.01), sameCard=!!(cd && sd);
+      if (!sameCard && d>tol) return;                                      // without a card match the amount must match
+      // same card and same month links even when the totals differ a little (fees, foreign currency, a missing row)
+      let score=d + Math.abs(s.guess?md-1:md)*1e5; if(sameCard) score-=1e9; if(d<=tol) score-=1e6; if(score<bd){ bd=score; best=s; } });
     if (best){ linkOf[c.id]=best.key; stmtTo[best.key]=c.id; }
   });
   const byId=new Map(all.map(t=>[t.id,t]));
@@ -1112,7 +1124,7 @@ function renderTx(){
       <td class="td-date" style="white-space:nowrap">${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?`<div class="muted" style="font-size:.76rem">${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}</div>`:''; })()}</td>
       <td class="td-desc"><button class="desc-btn" data-cat2 title="שינוי סיווג">${esc(t.desc)}</button>${t.inst?`<span class="inst-tag" title="${t.inst.total?'עסקה של '+fmt(t.inst.total):''}">תשלום ${t.inst.n}/${t.inst.of}</span>`:''}${(t.byE && t.byE!==me().email)?`<span class="by-tag" title="${esc(t.byE)}">👤 ${esc(t.by||t.byE)}</span>`:''}${salaryShifted(t)?`<button class="inst-tag" data-shift="0" title="להחזיר לחודש שבו התקבלה">↪ נספרת ב${monthName(repMonth(t,'charge'))} ✕</button>`:(effKind(t)==='income' && (t.catId==='salary' || t.shiftNext===false))?`<button class="shift-btn" data-shift="1" title="לספור את ההכנסה בחודש הבא">↪ לשייך ל${monthName(shiftMonth(t.date.slice(0,7),1))}</button>`:''}${linkTagHTML(t)}${t.note?`<div class="muted" style="font-size:.82rem">${esc(t.note)}</div>`:''}</td>
       <td class="td-cat"><button class="cat-btn ${t.catId==='uncat'?'is-uncat':''}" data-cat>${esc(catById(t.catId).name)} ▾</button></td>
-      <td class="td-meta"><span>${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?` · ${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}`:''; })()}</span>${t.card?`<span>💳 ${esc(cardName(t.card))}</span>`:''}<label class="chk" style="font-weight:400"><input type="checkbox" data-incl2 ${t.excluded?'':'checked'}> בדוחות</label></td>
+      <td class="td-meta"><span>${fmtD(effDate(t,basis))}${(()=>{ const o=effDate(t,basis==='deal'?'charge':'deal'); return o!==effDate(t,basis)?` · ${basis==='deal'?'חיוב':'עסקה'} ${fmtD(o)}`:''; })()}</span>${t.card?`<span>${t.srcKind==='bank'?'🏦':'💳'} ${esc(cardName(t.card))}</span>`:''}<label class="chk" style="font-weight:400"><input type="checkbox" data-incl2 ${t.excluded?'':'checked'}> בדוחות</label></td>
       <td class="td-nec"><select data-nec aria-label="רמת הכרח" ${effKind(t)==='income'?'disabled':''} style="max-width:110px">
         ${effKind(t)==='income'?'<option>הכנסה</option>':isRefund(t)?'<option>זיכוי</option>':`<option value="">${NEC[catById(t.catId).nec].label}</option>`+Object.entries(NEC).map(([k,n])=>`<option value="${k}" ${t.nec===k?'selected':''}>${n.label}</option>`).join('')}
       </select></td>
@@ -1159,7 +1171,8 @@ function linkTagHTML(t){
   if (isCardChargeRow(t)){
     const k=I.linkOf[t.id], s=k&&I.stm[k], f=s&&(S.settings.files||{})[s.fileId], cd=chargeCardDigits(t);
     const cardTag = cd ? `<button class="link-tag ok" data-fcard title="שינוי הכרטיס">💳 כרטיס ${cd}</button> ` : `<button class="link-tag warn" data-fcard>⚠️ לא צוין מספר כרטיס · הוספה</button> `;
-    return k ? `<div style="font-size:.8rem;margin-top:2px;display:flex;gap:4px;flex-wrap:wrap">${cardTag}<button class="link-tag ok" data-link>🔗 פירוט: ${esc(f?f.name:(s.card?cardName(s.card):'כרטיס'))} · ${s.n} עסקאות · לא נספר בנפרד</button></div>`
+    const diff = s ? Math.round((s.sum - t.amount)*100)/100 : 0;
+    return k ? `<div style="font-size:.8rem;margin-top:2px;display:flex;gap:4px;flex-wrap:wrap">${cardTag}<button class="link-tag ok" data-link>🔗 פירוט: ${esc(s.files&&s.files.size>1?s.files.size+' קבצים':(f?f.name:(s.card?cardName(s.card):'כרטיס')))} · ${s.n} עסקאות · לא נספר בנפרד</button>${Math.abs(diff)>=2?`<button class="link-tag warn" data-link title="סכום העסקאות בפירוט לעומת החיוב בבנק">הפרש ${diff>0?'+':''}${fmt2(diff)}</button>`:''}</div>`
              : `<div style="font-size:.8rem;margin-top:2px;display:flex;gap:4px;flex-wrap:wrap">${cardTag}<button class="link-tag warn" data-link>⚠️ אין קובץ פירוט מקושר · קישור</button></div>`;
   }
   if (isCreditRow(t) && I.hasBank){
